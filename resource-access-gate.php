@@ -3,6 +3,9 @@
  * Plugin Name: Resource Access Gate
  * Description: Free, universal plugin for gated resource downloads using a valid email address.
  * Version: 1.0.0
+ * Requires at least: 5.8
+ * Tested up to: 7.0
+ * Requires PHP: 7.4
  * Author: Eli Gold
  * Author URI: https://github.com/elig-45
  * License: GPL-2.0-or-later
