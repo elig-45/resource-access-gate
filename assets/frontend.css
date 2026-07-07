@@ -1,0 +1,94 @@
+.bra-resource-gate {
+	max-width: 540px;
+	margin-top: 18px;
+}
+
+.bra-resource-form label {
+	display: block;
+	margin-bottom: 8px;
+	color: #121066;
+	font-weight: 800;
+}
+
+.bra-resource-fields {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 10px;
+	align-items: center;
+}
+
+.bra-resource-fields input[type="email"] {
+	flex: 1 1 260px;
+	min-height: 44px;
+	margin: 0;
+	padding: 0 13px;
+	border: 1px solid #d9dce7;
+	border-radius: 4px;
+	background: #fff;
+	color: #16172a;
+	box-sizing: border-box;
+}
+
+.bra-resource-fields input[type="email"]:focus {
+	border-color: #121066;
+	outline: 2px solid rgba(18, 16, 102, .12);
+}
+
+.bra-resource-fields button,
+.bra-resource-result a {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-height: 44px;
+	padding: 0 18px;
+	border: 0;
+	border-radius: 4px;
+	background: #121066;
+	color: #fff !important;
+	font-weight: 800;
+	text-decoration: none !important;
+	cursor: pointer;
+}
+
+.bra-resource-fields button:hover,
+.bra-resource-result a:hover {
+	background: #211ca0;
+	color: #fff !important;
+}
+
+.bra-resource-fields button:disabled {
+	cursor: wait;
+	opacity: .72;
+}
+
+.bra-resource-message {
+	margin: 10px 0 0;
+	color: #121066;
+	font-size: 13px;
+	line-height: 1.45;
+}
+
+.bra-resource-message.is-error {
+	color: #b3261e;
+	font-weight: 700;
+}
+
+.bra-resource-result {
+	margin: 14px 0 0;
+}
+
+@media (max-width: 640px) {
+	.bra-resource-fields {
+		display: block;
+	}
+
+	.bra-resource-fields input[type="email"],
+	.bra-resource-fields button,
+	.bra-resource-result a {
+		width: 100%;
+	}
+
+	.bra-resource-fields button {
+		margin-top: 10px;
+	}
+}
