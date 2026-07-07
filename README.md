@@ -1,24 +1,28 @@
-# Boublil Resource Access
+# Resource Access Gate
 
-Plugin WordPress privé pour protéger le téléchargement de ressources par saisie d'une adresse email valide.
+Free, universal WordPress plugin for gated resource downloads using a valid email address.
 
-## Fonctionnalités
+## Features
 
-- Shortcode principal : `[boublil_resource_gate id="resource-id"]`
-- Compatibilité avec l'ancien shortcode : `[bc_report_gate title="Titre de la ressource"]`
-- Validation email côté navigateur et côté serveur
-- Lien de téléchargement affiché après validation de l'email
-- Lien également envoyé par email via `wp_mail()`
-- Journalisation des contacts et des demandes dans des tables dédiées
-- Page admin WordPress pour les réglages, les ressources, la visualisation des données et l'export CSV
+- Shortcode: `[resource_access_gate id="resource-id"]`
+- Email validation in the browser and on the server
+- Download link displayed after a valid email is submitted
+- Download link also sent by email with `wp_mail()`
+- Dedicated database tables for contacts and resource requests
+- WordPress admin page for settings, resource management, data viewing, and CSV export
+- No bundled site-specific resources
 
 ## Installation
 
-1. Copier le dossier `boublil-resource-access` dans `wp-content/plugins/`.
-2. Activer le plugin dans l'administration WordPress.
-3. Aller dans `Ressources` pour ajuster les réglages email et les ressources.
+1. Copy the `resource-access-gate` folder into `wp-content/plugins/`.
+2. Activate the plugin in WordPress admin.
+3. Open `Resources` to configure email settings and add resources.
 
-## Auteur
+## License
+
+GPL-2.0-or-later. Free for everyone to use, modify, and redistribute under the license terms.
+
+## Author
 
 Eli Gold  
-GitHub : https://github.com/elig45
+GitHub: https://github.com/elig-45

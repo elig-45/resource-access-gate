@@ -1,34 +1,35 @@
 <?php
 /**
- * Plugin Name: Boublil Resource Access
- * Description: Garde l'accès aux ressources par email valide, journalise les demandes et exporte les données.
+ * Plugin Name: Resource Access Gate
+ * Description: Free, universal plugin for gated resource downloads using a valid email address.
  * Version: 1.0.0
  * Author: Eli Gold
- * Author URI: https://github.com/elig45
- * Text Domain: boublil-resource-access
+ * Author URI: https://github.com/elig-45
+ * License: GPL-2.0-or-later
+ * License URI: https://www.gnu.org/licenses/gpl-2.0.html
+ * Text Domain: resource-access-gate
  */
 
 if (!defined('ABSPATH')) {
 	exit;
 }
 
-final class Boublil_Resource_Access {
+final class Resource_Access_Gate {
 	const VERSION = '1.0.0';
-	const OPTION_SETTINGS = 'bra_settings';
-	const OPTION_RESOURCES = 'bra_resources';
-	const OPTION_SCHEMA = 'bra_schema_version';
-	const AJAX_ACTION = 'bra_resource_access';
-	const NONCE_ACTION = 'bra_resource_access';
+	const OPTION_SETTINGS = 'rag_settings';
+	const OPTION_RESOURCES = 'rag_resources';
+	const OPTION_SCHEMA = 'rag_schema_version';
+	const AJAX_ACTION = 'rag_resource_access';
+	const NONCE_ACTION = 'rag_resource_access';
 
 	public static function init() {
 		add_action('init', array(__CLASS__, 'maybe_install'));
-		add_shortcode('boublil_resource_gate', array(__CLASS__, 'resource_gate_shortcode'));
-		add_shortcode('bc_report_gate', array(__CLASS__, 'legacy_report_gate_shortcode'));
+		add_shortcode('resource_access_gate', array(__CLASS__, 'resource_gate_shortcode'));
 		add_action('wp_ajax_' . self::AJAX_ACTION, array(__CLASS__, 'handle_resource_access'));
 		add_action('wp_ajax_nopriv_' . self::AJAX_ACTION, array(__CLASS__, 'handle_resource_access'));
 		add_action('admin_menu', array(__CLASS__, 'register_admin_page'));
-		add_action('admin_post_bra_save_settings', array(__CLASS__, 'handle_save_settings'));
-		add_action('admin_post_bra_export_csv', array(__CLASS__, 'handle_export_csv'));
+		add_action('admin_post_rag_save_settings', array(__CLASS__, 'handle_save_settings'));
+		add_action('admin_post_rag_export_csv', array(__CLASS__, 'handle_export_csv'));
 	}
 
 	public static function activate() {
@@ -53,7 +54,7 @@ final class Boublil_Resource_Access {
 		$default_from = $host ? 'noreply@' . $host : get_option('admin_email');
 
 		return array(
-			'from_name' => 'Boublil Conseil',
+			'from_name' => wp_specialchars_decode(get_bloginfo('name'), ENT_QUOTES),
 			'from_email' => $default_from,
 			'subject' => '[{site_name}] Votre lien de téléchargement',
 			'button_label' => 'Recevoir le lien',
@@ -64,32 +65,7 @@ final class Boublil_Resource_Access {
 	}
 
 	private static function default_resources() {
-		return array(
-			'les-mutations-du-commerce-et-de-la-consommation-en-12-videos' => array(
-				'id' => 'les-mutations-du-commerce-et-de-la-consommation-en-12-videos',
-				'title' => 'Les Mutations du commerce et de la consommation en 12 vidéos',
-				'url' => home_url('/wp-content/uploads/2026/06/Les-Mutations-du-Commerce-et-de-la-Consommation-en-12-videos.pdf'),
-				'enabled' => 1,
-			),
-			'zara-levolution-du-parc-de-magasins-et-les-impacts-financiers' => array(
-				'id' => 'zara-levolution-du-parc-de-magasins-et-les-impacts-financiers',
-				'title' => 'Zara : L évolution du parc de magasins et les impacts financiers',
-				'url' => home_url('/wp-content/uploads/2026/06/Zara-evolution-parc-magasins-impacts-financiers.pdf'),
-				'enabled' => 1,
-			),
-			'retail-les-nouvelles-strategies-gagnantes' => array(
-				'id' => 'retail-les-nouvelles-strategies-gagnantes',
-				'title' => 'Retail : les Nouvelles Stratégies Gagnantes',
-				'url' => home_url('/wp-content/uploads/2026/06/Retail.-Les-Nouvelles-Strategies-Gagnantes.pdf'),
-				'enabled' => 1,
-			),
-			'cap-vers-la-resilience-augmentee' => array(
-				'id' => 'cap-vers-la-resilience-augmentee',
-				'title' => 'Cap vers la Résilience Augmentée',
-				'url' => home_url('/wp-content/uploads/2026/06/Cap-vers-la-Resilience-Augmentee.pdf'),
-				'enabled' => 1,
-			),
-		);
+		return array();
 	}
 
 	private static function ensure_default_options() {
@@ -150,8 +126,8 @@ final class Boublil_Resource_Access {
 		global $wpdb;
 
 		return array(
-			'contacts' => $wpdb->prefix . 'bra_resource_contacts',
-			'requests' => $wpdb->prefix . 'bra_resource_requests',
+			'contacts' => $wpdb->prefix . 'rag_resource_contacts',
+			'requests' => $wpdb->prefix . 'rag_resource_requests',
 		);
 	}
 
@@ -289,9 +265,10 @@ final class Boublil_Resource_Access {
 			)
 		);
 		$message = sprintf(
-			"Bonjour,\n\nVoici votre lien de téléchargement pour :\n%s\n\n%s\n\nBoublil Conseil\n%s\n",
+			"Bonjour,\n\nVoici votre lien de téléchargement pour :\n%s\n\n%s\n\n%s\n%s\n",
 			$resource['title'],
 			$resource['url'],
+			$site_name,
 			home_url('/')
 		);
 		$headers = array('Content-Type: text/plain; charset=UTF-8');
@@ -307,21 +284,21 @@ final class Boublil_Resource_Access {
 
 	public static function enqueue_frontend_assets() {
 		wp_enqueue_style(
-			'boublil-resource-access',
+			'resource-access-gate',
 			self::plugin_url('assets/frontend.css'),
 			array(),
 			self::VERSION
 		);
 		wp_enqueue_script(
-			'boublil-resource-access',
+			'resource-access-gate',
 			self::plugin_url('assets/frontend.js'),
 			array(),
 			self::VERSION,
 			true
 		);
 		wp_localize_script(
-			'boublil-resource-access',
-			'BoublilResourceAccess',
+			'resource-access-gate',
+			'ResourceAccessGate',
 			array(
 				'ajaxUrl' => admin_url('admin-ajax.php'),
 				'nonce' => wp_create_nonce(self::NONCE_ACTION),
@@ -340,7 +317,7 @@ final class Boublil_Resource_Access {
 				'title' => '',
 			),
 			$atts,
-			'boublil_resource_gate'
+			'resource_access_gate'
 		);
 
 		$resource_id = $atts['id'] ?: $atts['key'];
@@ -356,43 +333,25 @@ final class Boublil_Resource_Access {
 		self::enqueue_frontend_assets();
 
 		$settings = self::settings();
-		$field_id = wp_unique_id('bra-resource-email-');
+		$field_id = wp_unique_id('rag-resource-email-');
 
 		ob_start();
 		?>
-		<div class="bra-resource-gate" data-resource-id="<?php echo esc_attr($resource['id']); ?>">
-			<form class="bra-resource-form" novalidate>
+		<div class="rag-resource-gate" data-resource-id="<?php echo esc_attr($resource['id']); ?>">
+			<form class="rag-resource-form" novalidate>
 				<label for="<?php echo esc_attr($field_id); ?>"><?php echo esc_html($settings['helper_text']); ?></label>
-				<div class="bra-resource-fields">
+				<div class="rag-resource-fields">
 					<input id="<?php echo esc_attr($field_id); ?>" type="email" name="email" autocomplete="email" required placeholder="nom@entreprise.fr">
 					<button type="submit"><?php echo esc_html($settings['button_label']); ?></button>
 				</div>
-				<p class="bra-resource-message" aria-live="polite" hidden></p>
-				<p class="bra-resource-result" hidden>
+				<p class="rag-resource-message" aria-live="polite" hidden></p>
+				<p class="rag-resource-result" hidden>
 					<a href="#" rel="noopener" target="_blank" download>Télécharger le document</a>
 				</p>
 			</form>
 		</div>
 		<?php
 		return (string) ob_get_clean();
-	}
-
-	public static function legacy_report_gate_shortcode($atts) {
-		$atts = shortcode_atts(
-			array(
-				'title' => '',
-				'key' => '',
-			),
-			$atts,
-			'bc_report_gate'
-		);
-
-		return self::resource_gate_shortcode(
-			array(
-				'id' => $atts['key'],
-				'title' => $atts['title'],
-			)
-		);
 	}
 
 	public static function handle_resource_access() {
@@ -433,10 +392,10 @@ final class Boublil_Resource_Access {
 
 	public static function register_admin_page() {
 		add_menu_page(
-			'Boublil Resource Access',
+			'Resource Access Gate',
 			'Ressources',
 			'manage_options',
-			'boublil-resource-access',
+			'resource-access-gate',
 			array(__CLASS__, 'render_admin_page'),
 			'dashicons-download',
 			58
@@ -492,12 +451,12 @@ final class Boublil_Resource_Access {
 			wp_die('Accès refusé.');
 		}
 
-		check_admin_referer('bra_save_settings');
+		check_admin_referer('rag_save_settings');
 
-		update_option(self::OPTION_SETTINGS, self::sanitize_settings($_POST['bra_settings'] ?? array()), false);
-		update_option(self::OPTION_RESOURCES, self::sanitize_resources_for_save($_POST['bra_resources'] ?? array()), false);
+		update_option(self::OPTION_SETTINGS, self::sanitize_settings($_POST['rag_settings'] ?? array()), false);
+		update_option(self::OPTION_RESOURCES, self::sanitize_resources_for_save($_POST['rag_resources'] ?? array()), false);
 
-		wp_safe_redirect(add_query_arg(array('page' => 'boublil-resource-access', 'updated' => '1'), admin_url('admin.php')));
+		wp_safe_redirect(add_query_arg(array('page' => 'resource-access-gate', 'updated' => '1'), admin_url('admin.php')));
 		exit;
 	}
 
@@ -537,10 +496,10 @@ final class Boublil_Resource_Access {
 		$resources[] = array('id' => '', 'title' => '', 'url' => '', 'enabled' => 1);
 		$stats = self::stats();
 		$requests = self::recent_requests();
-		$export_url = wp_nonce_url(admin_url('admin-post.php?action=bra_export_csv'), 'bra_export_csv');
+		$export_url = wp_nonce_url(admin_url('admin-post.php?action=rag_export_csv'), 'rag_export_csv');
 		?>
 		<div class="wrap">
-			<h1>Boublil Resource Access</h1>
+			<h1>Resource Access Gate</h1>
 
 			<?php if (isset($_GET['updated'])) : ?>
 				<div class="notice notice-success is-dismissible"><p>Réglages enregistrés.</p></div>
@@ -548,48 +507,45 @@ final class Boublil_Resource_Access {
 
 			<p>
 				Shortcode principal :
-				<code>[boublil_resource_gate id="retail-les-nouvelles-strategies-gagnantes"]</code>
-				<br>
-				Compatibilité maintenue :
-				<code>[bc_report_gate title="Retail : les Nouvelles Stratégies Gagnantes"]</code>
+				<code>[resource_access_gate id="resource-id"]</code>
 			</p>
 
 			<form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
-				<input type="hidden" name="action" value="bra_save_settings">
-				<?php wp_nonce_field('bra_save_settings'); ?>
+				<input type="hidden" name="action" value="rag_save_settings">
+				<?php wp_nonce_field('rag_save_settings'); ?>
 
 				<h2>Réglages email</h2>
 				<table class="form-table" role="presentation">
 					<tr>
-						<th scope="row"><label for="bra-from-name">Nom expéditeur</label></th>
-						<td><input id="bra-from-name" class="regular-text" type="text" name="bra_settings[from_name]" value="<?php echo esc_attr($settings['from_name']); ?>"></td>
+						<th scope="row"><label for="rag-from-name">Nom expéditeur</label></th>
+						<td><input id="rag-from-name" class="regular-text" type="text" name="rag_settings[from_name]" value="<?php echo esc_attr($settings['from_name']); ?>"></td>
 					</tr>
 					<tr>
-						<th scope="row"><label for="bra-from-email">Email expéditeur</label></th>
-						<td><input id="bra-from-email" class="regular-text" type="email" name="bra_settings[from_email]" value="<?php echo esc_attr($settings['from_email']); ?>"></td>
+						<th scope="row"><label for="rag-from-email">Email expéditeur</label></th>
+						<td><input id="rag-from-email" class="regular-text" type="email" name="rag_settings[from_email]" value="<?php echo esc_attr($settings['from_email']); ?>"></td>
 					</tr>
 					<tr>
-						<th scope="row"><label for="bra-subject">Objet du mail</label></th>
+						<th scope="row"><label for="rag-subject">Objet du mail</label></th>
 						<td>
-							<input id="bra-subject" class="large-text" type="text" name="bra_settings[subject]" value="<?php echo esc_attr($settings['subject']); ?>">
+							<input id="rag-subject" class="large-text" type="text" name="rag_settings[subject]" value="<?php echo esc_attr($settings['subject']); ?>">
 							<p class="description">Variables disponibles : <code>{site_name}</code>, <code>{resource_title}</code>.</p>
 						</td>
 					</tr>
 					<tr>
-						<th scope="row"><label for="bra-helper">Texte du formulaire</label></th>
-						<td><input id="bra-helper" class="large-text" type="text" name="bra_settings[helper_text]" value="<?php echo esc_attr($settings['helper_text']); ?>"></td>
+						<th scope="row"><label for="rag-helper">Texte du formulaire</label></th>
+						<td><input id="rag-helper" class="large-text" type="text" name="rag_settings[helper_text]" value="<?php echo esc_attr($settings['helper_text']); ?>"></td>
 					</tr>
 					<tr>
-						<th scope="row"><label for="bra-button">Texte du bouton</label></th>
-						<td><input id="bra-button" class="regular-text" type="text" name="bra_settings[button_label]" value="<?php echo esc_attr($settings['button_label']); ?>"></td>
+						<th scope="row"><label for="rag-button">Texte du bouton</label></th>
+						<td><input id="rag-button" class="regular-text" type="text" name="rag_settings[button_label]" value="<?php echo esc_attr($settings['button_label']); ?>"></td>
 					</tr>
 					<tr>
-						<th scope="row"><label for="bra-success">Message succès</label></th>
-						<td><input id="bra-success" class="large-text" type="text" name="bra_settings[success_message]" value="<?php echo esc_attr($settings['success_message']); ?>"></td>
+						<th scope="row"><label for="rag-success">Message succès</label></th>
+						<td><input id="rag-success" class="large-text" type="text" name="rag_settings[success_message]" value="<?php echo esc_attr($settings['success_message']); ?>"></td>
 					</tr>
 					<tr>
-						<th scope="row"><label for="bra-mail-failure">Message si le mail échoue</label></th>
-						<td><input id="bra-mail-failure" class="large-text" type="text" name="bra_settings[failure_mail_message]" value="<?php echo esc_attr($settings['failure_mail_message']); ?>"></td>
+						<th scope="row"><label for="rag-mail-failure">Message si le mail échoue</label></th>
+						<td><input id="rag-mail-failure" class="large-text" type="text" name="rag_settings[failure_mail_message]" value="<?php echo esc_attr($settings['failure_mail_message']); ?>"></td>
 					</tr>
 				</table>
 
@@ -607,12 +563,12 @@ final class Boublil_Resource_Access {
 						<?php foreach ($resources as $index => $resource) : ?>
 							<tr>
 								<td>
-									<input type="hidden" name="bra_resources[<?php echo (int) $index; ?>][enabled]" value="0">
-									<input type="checkbox" name="bra_resources[<?php echo (int) $index; ?>][enabled]" value="1" <?php checked(!empty($resource['enabled'])); ?>>
+									<input type="hidden" name="rag_resources[<?php echo (int) $index; ?>][enabled]" value="0">
+									<input type="checkbox" name="rag_resources[<?php echo (int) $index; ?>][enabled]" value="1" <?php checked(!empty($resource['enabled'])); ?>>
 								</td>
-								<td><input class="regular-text" type="text" name="bra_resources[<?php echo (int) $index; ?>][id]" value="<?php echo esc_attr($resource['id']); ?>"></td>
-								<td><input class="large-text" type="text" name="bra_resources[<?php echo (int) $index; ?>][title]" value="<?php echo esc_attr($resource['title']); ?>"></td>
-								<td><input class="large-text code" type="url" name="bra_resources[<?php echo (int) $index; ?>][url]" value="<?php echo esc_url($resource['url']); ?>"></td>
+								<td><input class="regular-text" type="text" name="rag_resources[<?php echo (int) $index; ?>][id]" value="<?php echo esc_attr($resource['id']); ?>"></td>
+								<td><input class="large-text" type="text" name="rag_resources[<?php echo (int) $index; ?>][title]" value="<?php echo esc_attr($resource['title']); ?>"></td>
+								<td><input class="large-text code" type="url" name="rag_resources[<?php echo (int) $index; ?>][url]" value="<?php echo esc_url($resource['url']); ?>"></td>
 							</tr>
 						<?php endforeach; ?>
 					</tbody>
@@ -664,7 +620,7 @@ final class Boublil_Resource_Access {
 			wp_die('Accès refusé.');
 		}
 
-		check_admin_referer('bra_export_csv');
+		check_admin_referer('rag_export_csv');
 
 		global $wpdb;
 		$tables = self::table_names();
@@ -675,7 +631,7 @@ final class Boublil_Resource_Access {
 
 		nocache_headers();
 		header('Content-Type: text/csv; charset=utf-8');
-		header('Content-Disposition: attachment; filename=boublil-resource-access-' . gmdate('Y-m-d') . '.csv');
+		header('Content-Disposition: attachment; filename=resource-access-gate-' . gmdate('Y-m-d') . '.csv');
 
 		$output = fopen('php://output', 'w');
 		echo "\xEF\xBB\xBF";
@@ -699,5 +655,6 @@ final class Boublil_Resource_Access {
 	}
 }
 
-register_activation_hook(__FILE__, array('Boublil_Resource_Access', 'activate'));
-Boublil_Resource_Access::init();
+register_activation_hook(__FILE__, array('Resource_Access_Gate', 'activate'));
+Resource_Access_Gate::init();
+

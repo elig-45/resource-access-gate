@@ -1,10 +1,10 @@
 (function () {
 	function closestGate(element) {
-		return element ? element.closest('.bra-resource-gate') : null;
+		return element ? element.closest('.rag-resource-gate') : null;
 	}
 
 	function setMessage(form, message, isError) {
-		var messageNode = form.querySelector('.bra-resource-message');
+		var messageNode = form.querySelector('.rag-resource-message');
 		if (!messageNode) {
 			return;
 		}
@@ -15,7 +15,7 @@
 	}
 
 	document.addEventListener('submit', function (event) {
-		var form = event.target.closest('.bra-resource-form');
+		var form = event.target.closest('.rag-resource-form');
 		if (!form) {
 			return;
 		}
@@ -25,11 +25,11 @@
 		var gate = closestGate(form);
 		var emailInput = form.querySelector('input[type="email"]');
 		var button = form.querySelector('button[type="submit"]');
-		var result = form.querySelector('.bra-resource-result');
+		var result = form.querySelector('.rag-resource-result');
 		var resultLink = result ? result.querySelector('a') : null;
 		var email = emailInput ? emailInput.value.trim() : '';
 		var resourceId = gate ? gate.getAttribute('data-resource-id') : '';
-		var config = window.BoublilResourceAccess || {};
+		var config = window.ResourceAccessGate || {};
 
 		if (!emailInput || !emailInput.validity.valid || email.indexOf('@') === -1) {
 			setMessage(form, config.invalidEmail || 'Adresse email invalide.', true);
@@ -50,7 +50,7 @@
 		}
 
 		var data = new FormData();
-		data.append('action', 'bra_resource_access');
+		data.append('action', 'rag_resource_access');
 		data.append('nonce', config.nonce || '');
 		data.append('email', email);
 		data.append('resource_id', resourceId);
@@ -86,3 +86,4 @@
 		});
 	});
 })();
+
