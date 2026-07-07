@@ -8,13 +8,19 @@ Stable tag: 1.0.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Protect downloadable resources behind a simple email gate, then show and email the download link.
+Free forever and open-source: unlimited email-gated downloads with no premium tier or paid unlocks.
 
 == Description ==
 
-Resource Access Gate is a lightweight plugin for sharing downloadable resources through a simple email form.
+Resource Access Gate is a free forever and open-source plugin for sharing downloadable resources through a simple email form.
 
 Visitors enter a valid email address, the download link appears on the page, and the same link is sent by email. Site administrators can manage resources, review requests, and export collected data from the WordPress admin area.
+
+= Free means free =
+
+Resource Access Gate is not a freemium plugin. It has no premium tier, paid unlocks, artificial resource limits, submission caps, vendor account requirement, bundled tracking, or front-end branding links.
+
+The only practical limits are your WordPress hosting, database, and email delivery setup.
 
 = Key features =
 
@@ -25,7 +31,7 @@ Visitors enter a valid email address, the download link appears on the page, and
 * Store contacts and requests in dedicated database tables.
 * Export request data as CSV.
 * Keep resource URLs out of the initial page HTML.
-* Avoid bundled third-party services, tracking, or front-end branding links.
+* Use a free and open-source GPL-licensed plugin.
 
 = Privacy =
 

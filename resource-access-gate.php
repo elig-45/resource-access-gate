@@ -1,7 +1,7 @@
 <?php
 /**
  * Plugin Name: Resource Access Gate
- * Description: Free, universal plugin for gated resource downloads using a valid email address.
+ * Description: Free forever and open-source plugin for unlimited email-gated resource downloads, with no premium tier or paid unlocks.
  * Version: 1.0.0
  * Requires at least: 5.8
  * Tested up to: 7.0

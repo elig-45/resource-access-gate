@@ -1,15 +1,28 @@
 # Resource Access Gate
 
-Turn any downloadable resource into a clean email-gated experience for WordPress.
+Free forever, open source, and built for unlimited email-gated resource downloads in WordPress.
 
-Resource Access Gate is a lightweight, free plugin for publishers, consultants, agencies, creators, and teams who want to share PDFs, reports, templates, white papers, decks, or private files without adding a heavy marketing platform.
+Resource Access Gate is a lightweight plugin for publishers, consultants, agencies, creators, and teams who want to share PDFs, reports, templates, white papers, decks, or private files without adding a heavy marketing platform.
 
 Visitors enter a valid email address, the download link appears instantly, and the same link is sent by email. Requests are stored in WordPress and can be reviewed or exported from the admin area.
+
+## Free Means Free
+
+This is not a freemium plugin.
+
+- No premium tier
+- No paid unlocks
+- No artificial resource limits
+- No submission caps
+- No vendor account required
+- No bundled tracking or front-end branding links
+- Free and open source under GPL-2.0-or-later
+
+The only practical limits are your WordPress hosting, database, and email delivery setup.
 
 ## Why Use It
 
 - No third-party service required
-- No bundled tracking, branding, or external front-end links
 - Works with a simple shortcode
 - Keeps resource URLs out of the initial page HTML
 - Sends download links with WordPress mail
