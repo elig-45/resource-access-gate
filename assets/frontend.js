@@ -25,8 +25,9 @@
 		var gate = closestGate(form);
 		var emailInput = form.querySelector('input[type="email"]');
 		var button = form.querySelector('button[type="submit"]');
-		var result = form.querySelector('.rag-resource-result');
+		var result = gate ? gate.querySelector('.rag-resource-result') : null;
 		var resultLink = result ? result.querySelector('a') : null;
+		var resultMessage = result ? result.querySelector('.rag-resource-result-message') : null;
 		var email = emailInput ? emailInput.value.trim() : '';
 		var resourceId = gate ? gate.getAttribute('data-resource-id') : '';
 		var config = window.ResourceAccessGate || {};
@@ -66,15 +67,20 @@
 				throw new Error('invalid-response');
 			}
 
-			setMessage(form, payload.data.message || '', !payload.data.mailSent);
+			if (resultMessage) {
+				resultMessage.textContent = payload.data.message || '';
+				resultMessage.classList.toggle('is-error', !payload.data.mailSent);
+			}
 
 			if (resultLink) {
 				resultLink.href = payload.data.downloadUrl;
 				resultLink.textContent = payload.data.downloadLabel || 'Télécharger le document';
 			}
 
+			form.hidden = true;
 			if (result) {
 				result.hidden = false;
+				result.focus();
 			}
 		}).catch(function () {
 			setMessage(form, config.genericError || 'Erreur. Réessayez plus tard.', true);

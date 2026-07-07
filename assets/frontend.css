@@ -74,7 +74,18 @@
 }
 
 .rag-resource-result {
-	margin: 14px 0 0;
+	margin: 0;
+}
+
+.rag-resource-result-message {
+	margin: 0 0 12px;
+	color: #121066;
+	font-size: 13px;
+	line-height: 1.45;
+}
+
+.rag-resource-result-message.is-error {
+	color: #7a4b00;
 }
 
 @media (max-width: 640px) {

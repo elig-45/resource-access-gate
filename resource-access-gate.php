@@ -348,10 +348,11 @@ final class Resource_Access_Gate {
 					<button type="submit"><?php echo esc_html($settings['button_label']); ?></button>
 				</div>
 				<p class="rag-resource-message" aria-live="polite" hidden></p>
-				<p class="rag-resource-result" hidden>
-					<a href="#" rel="noopener" target="_blank" download>Télécharger le document</a>
-				</p>
 			</form>
+			<div class="rag-resource-result" hidden tabindex="-1" aria-live="polite">
+				<p class="rag-resource-result-message"></p>
+				<a href="#" rel="noopener" target="_blank" download>Télécharger le document</a>
+			</div>
 		</div>
 		<?php
 		return (string) ob_get_clean();
