@@ -503,6 +503,27 @@ final class Resource_Access_Gate {
 		?>
 		<div class="wrap">
 			<h1>Resource Access Gate</h1>
+			<style>
+				.rag-shortcode-cell {
+					min-width: 360px;
+				}
+
+				.rag-shortcode-tools {
+					display: flex;
+					gap: 8px;
+					align-items: center;
+				}
+
+				.rag-shortcode-preview {
+					max-width: 260px;
+				}
+
+				.rag-copy-feedback {
+					color: #2271b1;
+					font-size: 12px;
+					line-height: 1.4;
+				}
+			</style>
 
 			<?php if (isset($_GET['updated'])) : ?>
 				<div class="notice notice-success is-dismissible"><p>Réglages enregistrés.</p></div>
@@ -560,22 +581,114 @@ final class Resource_Access_Gate {
 							<th scope="col">ID shortcode</th>
 							<th scope="col">Titre</th>
 							<th scope="col">URL du fichier</th>
+							<th scope="col">Shortcode</th>
 						</tr>
 					</thead>
 					<tbody>
 						<?php foreach ($resources as $index => $resource) : ?>
+							<?php
+							$resource_shortcode = '' !== (string) $resource['id']
+								? sprintf('[resource_access_gate id="%s"]', (string) $resource['id'])
+								: '';
+							?>
 							<tr>
 								<td>
 									<input type="hidden" name="rag_resources[<?php echo (int) $index; ?>][enabled]" value="0">
 									<input type="checkbox" name="rag_resources[<?php echo (int) $index; ?>][enabled]" value="1" <?php checked(!empty($resource['enabled'])); ?>>
 								</td>
-								<td><input class="regular-text" type="text" name="rag_resources[<?php echo (int) $index; ?>][id]" value="<?php echo esc_attr($resource['id']); ?>"></td>
+								<td><input class="regular-text rag-resource-id-input" type="text" name="rag_resources[<?php echo (int) $index; ?>][id]" value="<?php echo esc_attr($resource['id']); ?>"></td>
 								<td><input class="large-text" type="text" name="rag_resources[<?php echo (int) $index; ?>][title]" value="<?php echo esc_attr($resource['title']); ?>"></td>
 								<td><input class="large-text code" type="url" name="rag_resources[<?php echo (int) $index; ?>][url]" value="<?php echo esc_url($resource['url']); ?>"></td>
+								<td class="rag-shortcode-cell">
+									<div class="rag-shortcode-tools">
+										<input class="regular-text code rag-shortcode-preview" type="text" value="<?php echo esc_attr($resource_shortcode); ?>" readonly aria-label="Shortcode de la ressource">
+										<button type="button" class="button button-secondary rag-copy-shortcode">Copier</button>
+										<span class="rag-copy-feedback" aria-live="polite"></span>
+									</div>
+								</td>
 							</tr>
 						<?php endforeach; ?>
 					</tbody>
 				</table>
+				<script>
+					(function () {
+						function shortcodeFromRow(row) {
+							var idInput = row ? row.querySelector('.rag-resource-id-input') : null;
+							var id = idInput ? idInput.value.trim().replace(/"/g, '') : '';
+							return id ? '[resource_access_gate id="' + id + '"]' : '';
+						}
+
+						function updateShortcode(row) {
+							var preview = row ? row.querySelector('.rag-shortcode-preview') : null;
+							if (preview) {
+								preview.value = shortcodeFromRow(row);
+							}
+						}
+
+						function copyText(text, onSuccess, onError) {
+							if (navigator.clipboard && navigator.clipboard.writeText) {
+								navigator.clipboard.writeText(text).then(onSuccess).catch(onError);
+								return;
+							}
+
+							var textarea = document.createElement('textarea');
+							textarea.value = text;
+							textarea.setAttribute('readonly', 'readonly');
+							textarea.style.position = 'fixed';
+							textarea.style.left = '-9999px';
+							document.body.appendChild(textarea);
+							textarea.select();
+
+							try {
+								document.execCommand('copy') ? onSuccess() : onError();
+							} catch (error) {
+								onError();
+							} finally {
+								document.body.removeChild(textarea);
+							}
+						}
+
+						document.addEventListener('input', function (event) {
+							if (!event.target.classList.contains('rag-resource-id-input')) {
+								return;
+							}
+
+							updateShortcode(event.target.closest('tr'));
+						});
+
+						document.addEventListener('click', function (event) {
+							var button = event.target.closest('.rag-copy-shortcode');
+							if (!button) {
+								return;
+							}
+
+							var row = button.closest('tr');
+							var feedback = row ? row.querySelector('.rag-copy-feedback') : null;
+							var shortcode = shortcodeFromRow(row);
+							updateShortcode(row);
+
+							if (!shortcode) {
+								if (feedback) {
+									feedback.textContent = 'Ajoutez un ID.';
+								}
+								return;
+							}
+
+							copyText(shortcode, function () {
+								if (feedback) {
+									feedback.textContent = 'Copié.';
+									window.setTimeout(function () {
+										feedback.textContent = '';
+									}, 1800);
+								}
+							}, function () {
+								if (feedback) {
+									feedback.textContent = 'Copie impossible.';
+								}
+							});
+						});
+					})();
+				</script>
 
 				<?php submit_button('Enregistrer'); ?>
 			</form>
