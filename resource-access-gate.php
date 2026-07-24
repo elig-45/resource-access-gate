@@ -519,6 +519,22 @@ final class Resource_Access_Gate {
 					max-width: 260px;
 				}
 
+				.rag-copy-shortcode {
+					display: inline-flex;
+					align-items: center;
+					justify-content: center;
+					width: 32px;
+					min-width: 32px;
+					padding: 0;
+				}
+
+				.rag-copy-shortcode .dashicons {
+					width: 18px;
+					height: 18px;
+					font-size: 18px;
+					line-height: 18px;
+				}
+
 				.rag-copy-feedback {
 					color: #2271b1;
 					font-size: 12px;
@@ -603,7 +619,10 @@ final class Resource_Access_Gate {
 								<td class="rag-shortcode-cell">
 									<div class="rag-shortcode-tools">
 										<input class="regular-text code rag-shortcode-preview" type="text" value="<?php echo esc_attr($resource_shortcode); ?>" readonly aria-label="Shortcode de la ressource">
-										<button type="button" class="button button-secondary rag-copy-shortcode">Copier</button>
+										<button type="button" class="button button-secondary rag-copy-shortcode" aria-label="Copier le shortcode" title="Copier le shortcode">
+											<span class="dashicons dashicons-clipboard" aria-hidden="true"></span>
+											<span class="screen-reader-text">Copier le shortcode</span>
+										</button>
 										<span class="rag-copy-feedback" aria-live="polite"></span>
 									</div>
 								</td>
