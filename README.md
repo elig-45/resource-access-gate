@@ -93,6 +93,18 @@ element a `data-rag-open` attribute matching the modal ID:
     <td align="center"><strong>Accessible request modal</strong></td>
   </tr>
   <tr>
+    <td width="50%">
+      <img src="assets/screenshots/admin-email-settings.jpg" alt="Resource Access Gate email and data-retention settings in WordPress">
+    </td>
+    <td width="50%">
+      <img src="assets/screenshots/admin-resources-and-requests.jpg" alt="Resource management and request log in the WordPress admin area">
+    </td>
+  </tr>
+  <tr>
+    <td align="center"><strong>Email and retention settings</strong></td>
+    <td align="center"><strong>Resources and request log</strong></td>
+  </tr>
+  <tr>
     <td colspan="2">
       <img src="assets/screenshots/html-email-mailpit.png" alt="Branded HTML email received and rendered in Mailpit">
     </td>

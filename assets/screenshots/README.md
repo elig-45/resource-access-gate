@@ -11,4 +11,4 @@ The GNU GPL version 3 or later license covering the Resource Access Gate source
 code and original documentation does not grant any rights to this underlying
 example content.
 
-These screenshot files are excluded from installable release archives.
+These screenshot image files are excluded from installable release archives.

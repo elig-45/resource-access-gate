@@ -1,1 +1,2 @@
 /assets/screenshots/*.png export-ignore
+/assets/screenshots/*.jpg export-ignore
