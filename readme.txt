@@ -4,15 +4,15 @@ Tags: downloads, resources, email, shortcode, lead-generation
 Requires at least: 5.8
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 1.4.0
-License: GPLv2 or later
-License URI: https://www.gnu.org/licenses/gpl-2.0.html
+Stable tag: 1.5.0
+License: GPLv3 or later
+License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
-Free forever and open-source: unlimited email-gated downloads with no premium tier or paid unlocks.
+Free forever and free software: unlimited email-gated downloads with no premium tier or paid unlocks.
 
 == Description ==
 
-Resource Access Gate is a free forever and open-source plugin for sharing downloadable resources through a simple email form.
+Resource Access Gate is a free forever and free-software plugin for sharing downloadable resources through a simple email form.
 
 Visitors enter a valid email address, the download link appears on the page, and the same link is sent by email. Site administrators can manage resources, review requests, and export collected data from the WordPress admin area.
 
@@ -36,7 +36,7 @@ The only practical limits are your WordPress hosting, database, and email delive
 * Limit repeated requests and reject automated honeypot submissions.
 * Export request data as CSV.
 * Keep resource URLs out of the initial page HTML.
-* Use a free and open-source GPL-licensed plugin.
+* Use a free-software plugin licensed under GPLv3 or later.
 
 = Privacy =
 
@@ -80,6 +80,12 @@ Yes. Any downloadable file URL can be configured as a resource.
 
 == Changelog ==
 
+= 1.5.0 =
+* Relicensed the plugin under GNU GPL version 3 or later.
+* Added explicit copyright and license notices to all nontrivial source files.
+* Documented the all-rights-reserved status of examples visible in screenshots.
+* Excluded documentation screenshots from installable release archives.
+
 = 1.4.0 =
 * Added localized French and English front-end messages, resource titles, AJAX responses, and emails.
 * Synchronized the plugin metadata and documentation with version 1.4.0.
@@ -99,3 +105,11 @@ Yes. Any downloadable file URL can be configured as a resource.
 
 = 1.0.0 =
 * Initial release.
+
+== Copyright and License ==
+
+Copyright (C) 2026 Eli Gold.
+
+Resource Access Gate source code and original documentation are free software distributed under the GNU General Public License, version 3 or (at your option) any later version.
+
+All examples visible in documentation screenshots, including names, logos, trademarks, publication covers, report content, and site content, remain all rights reserved by their respective rights holders and are used solely for documentation and illustrative purposes. The plugin license grants no rights to this underlying example content.

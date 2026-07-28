@@ -1,16 +1,37 @@
 <?php
 /**
  * Plugin Name: Resource Access Gate
- * Description: Free forever and open-source plugin for unlimited email-gated resource downloads, with no premium tier or paid unlocks.
- * Version: 1.4.0
+ * Description: Free forever and free-software plugin for unlimited email-gated resource downloads, with no premium tier or paid unlocks.
+ * Version: 1.5.0
  * Requires at least: 5.8
  * Tested up to: 7.0
  * Requires PHP: 7.4
  * Author: Eli Gold
  * Author URI: https://github.com/elig-45
- * License: GPL-2.0-or-later
- * License URI: https://www.gnu.org/licenses/gpl-2.0.html
+ * License: GPL-3.0-or-later
+ * License URI: https://www.gnu.org/licenses/gpl-3.0.html
  * Text Domain: resource-access-gate
+ */
+
+/**
+ * Copyright (C) 2026 Eli Gold
+ *
+ * This file is part of Resource Access Gate.
+ *
+ * Resource Access Gate is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by the
+ * Free Software Foundation, either version 3 of the License, or (at your option)
+ * any later version.
+ *
+ * Resource Access Gate is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General
+ * Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License along with
+ * Resource Access Gate. If not, see <https://www.gnu.org/licenses/>.
+ *
+ * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
 if (!defined('ABSPATH')) {
@@ -18,7 +39,7 @@ if (!defined('ABSPATH')) {
 }
 
 final class Resource_Access_Gate {
-	const VERSION = '1.4.0';
+	const VERSION = '1.5.0';
 	const OPTION_SETTINGS = 'rag_settings';
 	const OPTION_RESOURCES = 'rag_resources';
 	const OPTION_SCHEMA = 'rag_schema_version';
