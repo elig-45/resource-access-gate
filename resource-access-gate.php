@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Resource Access Gate
  * Description: Free forever and open-source plugin for unlimited email-gated resource downloads, with no premium tier or paid unlocks.
- * Version: 1.0.0
+ * Version: 1.4.0
  * Requires at least: 5.8
  * Tested up to: 7.0
  * Requires PHP: 7.4
@@ -18,12 +18,15 @@ if (!defined('ABSPATH')) {
 }
 
 final class Resource_Access_Gate {
-	const VERSION = '1.0.0';
+	const VERSION = '1.4.0';
 	const OPTION_SETTINGS = 'rag_settings';
 	const OPTION_RESOURCES = 'rag_resources';
 	const OPTION_SCHEMA = 'rag_schema_version';
 	const AJAX_ACTION = 'rag_resource_access';
 	const NONCE_ACTION = 'rag_resource_access';
+	const CRON_HOOK = 'rag_cleanup_expired_data';
+	const RATE_LIMIT_MAX = 5;
+	const RATE_LIMIT_WINDOW = 15 * MINUTE_IN_SECONDS;
 
 	public static function init() {
 		add_action('init', array(__CLASS__, 'maybe_install'));
@@ -33,11 +36,17 @@ final class Resource_Access_Gate {
 		add_action('admin_menu', array(__CLASS__, 'register_admin_page'));
 		add_action('admin_post_rag_save_settings', array(__CLASS__, 'handle_save_settings'));
 		add_action('admin_post_rag_export_csv', array(__CLASS__, 'handle_export_csv'));
+		add_action(self::CRON_HOOK, array(__CLASS__, 'cleanup_expired_data'));
 	}
 
 	public static function activate() {
 		self::create_tables();
 		self::ensure_default_options();
+		self::schedule_cleanup();
+	}
+
+	public static function deactivate() {
+		wp_clear_scheduled_hook(self::CRON_HOOK);
 	}
 
 	public static function maybe_install() {
@@ -46,10 +55,66 @@ final class Resource_Access_Gate {
 		}
 
 		self::ensure_default_options();
+		self::schedule_cleanup();
 	}
 
 	private static function plugin_url($path = '') {
 		return plugin_dir_url(__FILE__) . ltrim($path, '/');
+	}
+
+	private static function current_language($requested_language = '') {
+		$requested_language = sanitize_key((string) $requested_language);
+		if (in_array($requested_language, array('fr', 'en'), true)) {
+			return $requested_language;
+		}
+
+		if (function_exists('pll_current_language')) {
+			$polylang_language = (string) pll_current_language('slug');
+			if (in_array($polylang_language, array('fr', 'en'), true)) {
+				return $polylang_language;
+			}
+		}
+
+		$locale = function_exists('determine_locale') ? determine_locale() : get_locale();
+
+		return 0 === strpos(strtolower((string) $locale), 'en') ? 'en' : 'fr';
+	}
+
+	private static function translated_resource($resource, $language) {
+		if ('en' !== $language || !is_array($resource)) {
+			return $resource;
+		}
+
+		$titles = array(
+			'les-mutations-du-commerce-et-de-la-consommation-en-12-videos' => 'Trade and Consumer Shifts in 12 Videos',
+			'retail-les-nouvelles-strategies-gagnantes' => 'Retail: New Winning Strategies',
+			'zara-levolution-du-parc-de-magasins-et-les-impacts-financiers' => 'Zara: Store Footprint Evolution and Financial Impacts',
+			'cap-vers-la-resilience-augmentee' => 'Towards Augmented Resilience',
+		);
+
+		if (isset($titles[$resource['id']])) {
+			$resource['title'] = $titles[$resource['id']];
+		}
+
+		return $resource;
+	}
+
+	private static function translated_settings($settings, $language) {
+		if ('en' !== $language) {
+			return $settings;
+		}
+
+		return array_merge(
+			$settings,
+			array(
+				'subject' => '[{site_name}] Your download link',
+				'button_label' => 'Receive the link',
+				'success_message' => 'Your download link is ready and has also been sent to you by email.',
+				'failure_mail_message' => 'Your download link is ready. The automatic email could not be sent at this time.',
+				'helper_text' => 'Enter your email address to receive the download link.',
+				'privacy_notice' => 'Your address is used only to send you the document and is retained for 12 months.',
+			)
+		);
 	}
 
 	private static function default_settings() {
@@ -64,6 +129,8 @@ final class Resource_Access_Gate {
 			'success_message' => 'Votre lien de téléchargement est prêt. Il vous a aussi été envoyé par email.',
 			'failure_mail_message' => 'Votre lien de téléchargement est prêt. L’email automatique n’a pas pu être envoyé pour le moment.',
 			'helper_text' => 'Indiquez votre adresse email pour recevoir le lien de téléchargement.',
+			'privacy_notice' => 'Votre adresse est utilisée uniquement pour vous envoyer le document et conservée pendant 12 mois.',
+			'retention_days' => 365,
 		);
 	}
 
@@ -177,6 +244,36 @@ final class Resource_Access_Gate {
 		update_option(self::OPTION_SCHEMA, self::VERSION, false);
 	}
 
+	private static function schedule_cleanup() {
+		if (!wp_next_scheduled(self::CRON_HOOK)) {
+			wp_schedule_event(time() + HOUR_IN_SECONDS, 'daily', self::CRON_HOOK);
+		}
+	}
+
+	public static function cleanup_expired_data() {
+		global $wpdb;
+
+		$settings = self::settings();
+		$retention_days = min(3650, max(1, (int) $settings['retention_days']));
+		$cutoff = (new DateTimeImmutable('now', wp_timezone()))
+			->modify('-' . $retention_days . ' days')
+			->format('Y-m-d H:i:s');
+		$tables = self::table_names();
+
+		$wpdb->query(
+			$wpdb->prepare(
+				"DELETE FROM {$tables['requests']} WHERE requested_at < %s",
+				$cutoff
+			)
+		);
+		$wpdb->query(
+			$wpdb->prepare(
+				"DELETE FROM {$tables['contacts']} WHERE updated_at < %s",
+				$cutoff
+			)
+		);
+	}
+
 	private static function hash_request_value($value) {
 		$value = trim((string) $value);
 		if ('' === $value) {
@@ -191,6 +288,23 @@ final class Resource_Access_Gate {
 			'ip_hash' => self::hash_request_value($_SERVER['REMOTE_ADDR'] ?? ''),
 			'user_agent_hash' => self::hash_request_value($_SERVER['HTTP_USER_AGENT'] ?? ''),
 		);
+	}
+
+	private static function rate_limit_key($email) {
+		$fingerprint = self::request_fingerprint();
+		$source = strtolower(trim((string) $email)) . '|' . $fingerprint['ip_hash'];
+
+		return 'rag_rate_' . substr(hash('sha256', $source), 0, 40);
+	}
+
+	private static function is_rate_limited($email) {
+		return (int) get_transient(self::rate_limit_key($email)) >= self::RATE_LIMIT_MAX;
+	}
+
+	private static function hit_rate_limit($email) {
+		$key = self::rate_limit_key($email);
+		$count = (int) get_transient($key);
+		set_transient($key, $count + 1, self::RATE_LIMIT_WINDOW);
 	}
 
 	private static function save_contact($email, $resource_id) {
@@ -257,9 +371,12 @@ final class Resource_Access_Gate {
 		);
 	}
 
-	private static function send_resource_email($email, $resource) {
-		$settings = self::settings();
+	private static function send_resource_email($email, $resource, $language = 'fr') {
+		$language = self::current_language($language);
+		$resource = self::translated_resource($resource, $language);
+		$settings = self::translated_settings(self::settings(), $language);
 		$site_name = wp_specialchars_decode(get_bloginfo('name'), ENT_QUOTES);
+		$site_url = home_url('/');
 		$subject = strtr(
 			(string) $settings['subject'],
 			array(
@@ -267,14 +384,23 @@ final class Resource_Access_Gate {
 				'{resource_title}' => $resource['title'],
 			)
 		);
-		$message = sprintf(
-			"Bonjour,\n\nVoici votre lien de téléchargement pour :\n%s\n\n%s\n\n%s\n%s\n",
-			$resource['title'],
-			$resource['url'],
-			$site_name,
-			home_url('/')
-		);
-		$headers = array('Content-Type: text/plain; charset=UTF-8');
+		$plain_message = 'en' === $language
+			? sprintf(
+				"Hello,\n\nThank you for your interest.\n\nYour document:\n%s\n\nDownload the document:\n%s\n\nKind regards,\n%s\n%s\n",
+				$resource['title'],
+				$resource['url'],
+				$site_name,
+				$site_url
+			)
+			: sprintf(
+				"Bonjour,\n\nMerci pour votre intérêt.\n\nVotre étude :\n%s\n\nTélécharger l’étude :\n%s\n\nBien cordialement,\n%s\n%s\n",
+				$resource['title'],
+				$resource['url'],
+				$site_name,
+				$site_url
+			);
+		$message = self::html_email_message($resource, $site_name, $site_url, $language);
+		$headers = array('Content-Type: text/html; charset=UTF-8');
 		$from_email = sanitize_email($settings['from_email']);
 		$from_name = sanitize_text_field($settings['from_name']);
 
@@ -282,10 +408,194 @@ final class Resource_Access_Gate {
 			$headers[] = sprintf('From: %s <%s>', $from_name, $from_email);
 		}
 
-		return wp_mail($email, $subject, $message, $headers);
+		$set_alt_body = static function ($phpmailer) use ($plain_message) {
+			$phpmailer->AltBody = $plain_message;
+		};
+
+		add_action('phpmailer_init', $set_alt_body);
+
+		try {
+			return wp_mail($email, $subject, $message, $headers);
+		} finally {
+			remove_action('phpmailer_init', $set_alt_body);
+		}
+	}
+
+	private static function email_logo_url() {
+		$theme_options = get_option('qode_options_proya', array());
+
+		if (is_array($theme_options)) {
+			foreach (array('logo_image', 'logo_image_sticky', 'logo_image_mobile') as $option_key) {
+				$logo_url = esc_url_raw($theme_options[$option_key] ?? '');
+				if ('' !== $logo_url) {
+					return $logo_url;
+				}
+			}
+		}
+
+		$custom_logo_id = (int) get_theme_mod('custom_logo');
+		if ($custom_logo_id) {
+			$custom_logo_url = wp_get_attachment_image_url($custom_logo_id, 'full');
+			if ($custom_logo_url) {
+				return esc_url_raw($custom_logo_url);
+			}
+		}
+
+		return '';
+	}
+
+	private static function html_email_message($resource, $site_name, $site_url, $language = 'fr') {
+		$logo_url = self::email_logo_url();
+		$resource_title = esc_html($resource['title']);
+		$download_url = esc_url($resource['url']);
+		$safe_site_name = esc_html($site_name);
+		$safe_site_url = esc_url($site_url);
+		$logo_markup = '' !== $logo_url
+			? sprintf(
+				'<img src="%s" width="250" alt="%s" style="display:block;width:250px;max-width:100%%;height:auto;border:0;color:#ffffff;font-family:Oswald,Arial Narrow,Arial,sans-serif;font-size:22px;font-weight:700;">',
+				esc_url($logo_url),
+				esc_attr($site_name)
+			)
+			: sprintf(
+				'<span style="color:#ffffff;font-family:Oswald,Arial Narrow,Arial,sans-serif;font-size:24px;font-weight:700;letter-spacing:.02em;">%s</span>',
+				$safe_site_name
+			);
+
+		if ('en' === self::current_language($language)) {
+			return sprintf(
+				'<!doctype html>
+<html lang="en">
+<head>
+	<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>%1$s</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f5f7fb;color:#323547;">
+	<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">Your document %2$s is ready to download.</div>
+	<table role="presentation" width="100%%" cellspacing="0" cellpadding="0" border="0" style="width:100%%;background-color:#f5f7fb;">
+		<tr>
+			<td align="center" style="padding:28px 12px;">
+				<table role="presentation" width="640" cellspacing="0" cellpadding="0" border="0" style="width:100%%;max-width:640px;background-color:#ffffff;border-collapse:collapse;">
+					<tr>
+						<td style="height:4px;background-color:#c9a24f;font-size:0;line-height:0;">&nbsp;</td>
+					</tr>
+					<tr>
+						<td style="padding:28px 40px;background-color:#121066;">%3$s</td>
+					</tr>
+					<tr>
+						<td style="padding:42px 40px 38px;background-color:#ffffff;font-family:Oswald,Arial Narrow,Arial,sans-serif;">
+							<p style="margin:0 0 10px;color:#c9a24f;font-size:12px;font-weight:700;letter-spacing:1.8px;line-height:18px;text-transform:uppercase;">Studies &amp; reports</p>
+							<h1 style="margin:0 0 18px;color:#121066;font-family:Oswald,Arial Narrow,Arial,sans-serif;font-size:30px;font-weight:500;line-height:38px;">Your document is ready</h1>
+							<p style="margin:0 0 8px;color:#5d6374;font-size:15px;line-height:24px;">Hello,</p>
+							<p style="margin:0 0 24px;color:#323547;font-size:16px;line-height:26px;">Thank you for your interest. You can now access the requested document.</p>
+							<table role="presentation" width="100%%" cellspacing="0" cellpadding="0" border="0" style="width:100%%;margin:2px 0 30px;border-collapse:collapse;">
+								<tr>
+									<td style="padding:17px 0 18px;border-top:1px solid #d9dce7;border-bottom:1px solid #d9dce7;">
+										<p style="margin:0 0 5px;color:#5d6374;font-size:13px;font-weight:400;line-height:19px;">Requested document</p>
+										<p style="margin:0;color:#121066;font-family:Oswald,Arial Narrow,Arial,sans-serif;font-size:20px;font-weight:500;line-height:28px;">%2$s</p>
+									</td>
+								</tr>
+							</table>
+							<table role="presentation" cellspacing="0" cellpadding="0" border="0" style="border-collapse:collapse;">
+								<tr>
+									<td bgcolor="#121066" style="background-color:#121066;">
+										<a href="%4$s" target="_blank" style="display:inline-block;padding:15px 24px;color:#ffffff;font-family:Oswald,Arial Narrow,Arial,sans-serif;font-size:15px;font-weight:500;line-height:20px;text-decoration:none;">Download the document&nbsp;&nbsp;→</a>
+									</td>
+								</tr>
+							</table>
+							<p style="margin:24px 0 0;color:#77798b;font-size:12px;line-height:19px;">If the button does not work, copy this link into your browser:<br><a href="%4$s" style="color:#121066;text-decoration:underline;word-break:break-all;">%4$s</a></p>
+						</td>
+					</tr>
+					<tr>
+						<td style="padding:24px 40px;background-color:#121066;font-family:Oswald,Arial Narrow,Arial,sans-serif;">
+							<p style="margin:0 0 5px;color:#ffffff;font-size:14px;font-weight:700;line-height:20px;">%1$s</p>
+							<p style="margin:0 0 10px;color:#c8c7df;font-size:12px;line-height:18px;">Strategic advisory</p>
+							<a href="%5$s" style="color:#6bc6b4;font-size:12px;line-height:18px;text-decoration:underline;">%5$s</a>
+						</td>
+					</tr>
+				</table>
+			</td>
+		</tr>
+	</table>
+</body>
+</html>',
+				$safe_site_name,
+				$resource_title,
+				$logo_markup,
+				$download_url,
+				$safe_site_url
+			);
+		}
+
+		return sprintf(
+			'<!doctype html>
+<html lang="fr">
+<head>
+	<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>%1$s</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f5f7fb;color:#323547;">
+	<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">Votre étude %2$s est prête à être téléchargée.</div>
+	<table role="presentation" width="100%%" cellspacing="0" cellpadding="0" border="0" style="width:100%%;background-color:#f5f7fb;">
+		<tr>
+			<td align="center" style="padding:28px 12px;">
+				<table role="presentation" width="640" cellspacing="0" cellpadding="0" border="0" style="width:100%%;max-width:640px;background-color:#ffffff;border-collapse:collapse;">
+					<tr>
+						<td style="height:4px;background-color:#c9a24f;font-size:0;line-height:0;">&nbsp;</td>
+					</tr>
+					<tr>
+						<td style="padding:28px 40px;background-color:#121066;">%3$s</td>
+					</tr>
+					<tr>
+						<td style="padding:42px 40px 38px;background-color:#ffffff;font-family:Oswald,Arial Narrow,Arial,sans-serif;">
+							<p style="margin:0 0 10px;color:#c9a24f;font-size:12px;font-weight:700;letter-spacing:1.8px;line-height:18px;text-transform:uppercase;">Études &amp; rapports</p>
+							<h1 style="margin:0 0 18px;color:#121066;font-family:Oswald,Arial Narrow,Arial,sans-serif;font-size:30px;font-weight:500;line-height:38px;">Votre étude est prête</h1>
+							<p style="margin:0 0 8px;color:#5d6374;font-size:15px;line-height:24px;">Bonjour,</p>
+							<p style="margin:0 0 24px;color:#323547;font-size:16px;line-height:26px;">Merci pour votre intérêt. Vous pouvez maintenant accéder au document demandé.</p>
+							<table role="presentation" width="100%%" cellspacing="0" cellpadding="0" border="0" style="width:100%%;margin:2px 0 30px;border-collapse:collapse;">
+								<tr>
+									<td style="padding:17px 0 18px;border-top:1px solid #d9dce7;border-bottom:1px solid #d9dce7;">
+										<p style="margin:0 0 5px;color:#5d6374;font-size:13px;font-weight:400;line-height:19px;">Document demandé</p>
+										<p style="margin:0;color:#121066;font-family:Oswald,Arial Narrow,Arial,sans-serif;font-size:20px;font-weight:500;line-height:28px;">%2$s</p>
+									</td>
+								</tr>
+							</table>
+							<table role="presentation" cellspacing="0" cellpadding="0" border="0" style="border-collapse:collapse;">
+								<tr>
+									<td bgcolor="#121066" style="background-color:#121066;">
+										<a href="%4$s" target="_blank" style="display:inline-block;padding:15px 24px;color:#ffffff;font-family:Oswald,Arial Narrow,Arial,sans-serif;font-size:15px;font-weight:500;line-height:20px;text-decoration:none;">Télécharger l’étude&nbsp;&nbsp;→</a>
+									</td>
+								</tr>
+							</table>
+							<p style="margin:24px 0 0;color:#77798b;font-size:12px;line-height:19px;">Si le bouton ne fonctionne pas, copiez ce lien dans votre navigateur :<br><a href="%4$s" style="color:#121066;text-decoration:underline;word-break:break-all;">%4$s</a></p>
+						</td>
+					</tr>
+					<tr>
+						<td style="padding:24px 40px;background-color:#121066;font-family:Oswald,Arial Narrow,Arial,sans-serif;">
+							<p style="margin:0 0 5px;color:#ffffff;font-size:14px;font-weight:700;line-height:20px;">%1$s</p>
+							<p style="margin:0 0 10px;color:#c8c7df;font-size:12px;line-height:18px;">Conseil stratégique indépendant</p>
+							<a href="%5$s" style="color:#6bc6b4;font-size:12px;line-height:18px;text-decoration:underline;">%5$s</a>
+						</td>
+					</tr>
+				</table>
+			</td>
+		</tr>
+	</table>
+</body>
+</html>',
+			$safe_site_name,
+			$resource_title,
+			$logo_markup,
+			$download_url,
+			$safe_site_url
+		);
 	}
 
 	public static function enqueue_frontend_assets() {
+		$language = self::current_language();
+		$is_english = 'en' === $language;
+
 		wp_enqueue_style(
 			'resource-access-gate',
 			self::plugin_url('assets/frontend.css'),
@@ -305,9 +615,11 @@ final class Resource_Access_Gate {
 			array(
 				'ajaxUrl' => admin_url('admin-ajax.php'),
 				'nonce' => wp_create_nonce(self::NONCE_ACTION),
-				'invalidEmail' => 'Veuillez saisir une adresse email valide.',
-				'loading' => 'Vérification...',
-				'genericError' => 'Le lien n a pas pu être préparé. Vérifiez l adresse ou réessayez plus tard.',
+				'invalidEmail' => $is_english ? 'Please enter a valid email address.' : 'Veuillez saisir une adresse email valide.',
+				'loading' => $is_english ? 'Checking...' : 'Vérification...',
+				'genericError' => $is_english
+					? 'The link could not be prepared. Check the address or try again later.'
+					: 'Le lien n’a pas pu être préparé. Vérifiez l’adresse ou réessayez plus tard.',
 			)
 		);
 	}
@@ -318,6 +630,8 @@ final class Resource_Access_Gate {
 				'id' => '',
 				'key' => '',
 				'title' => '',
+				'mode' => 'inline',
+				'modal_id' => '',
 			),
 			$atts,
 			'resource_access_gate'
@@ -335,24 +649,61 @@ final class Resource_Access_Gate {
 
 		self::enqueue_frontend_assets();
 
-		$settings = self::settings();
+		$language = self::current_language();
+		$is_english = 'en' === $language;
+		$resource = self::translated_resource($resource, $language);
+		$settings = self::translated_settings(self::settings(), $language);
 		$field_id = wp_unique_id('rag-resource-email-');
+		$is_modal = 'modal' === strtolower((string) $atts['mode']);
+		$modal_id = sanitize_html_class((string) $atts['modal_id']);
+
+		if ($is_modal && '' === $modal_id) {
+			$modal_id = 'rag-resource-modal-' . $resource['id'];
+		}
+
+		$modal_title_id = $modal_id . '-title';
+		$modal_resource_id = $modal_id . '-resource';
 
 		ob_start();
 		?>
-		<div class="rag-resource-gate" data-resource-id="<?php echo esc_attr($resource['id']); ?>">
+		<div class="rag-resource-gate<?php echo $is_modal ? ' rag-resource-gate--modal' : ''; ?>" data-resource-id="<?php echo esc_attr($resource['id']); ?>">
+			<?php if ($is_modal) : ?>
+				<div class="rag-resource-modal" id="<?php echo esc_attr($modal_id); ?>" hidden>
+					<div class="rag-resource-modal-backdrop" data-rag-close aria-hidden="true"></div>
+					<div
+						class="rag-resource-dialog"
+						role="dialog"
+						aria-modal="true"
+						aria-labelledby="<?php echo esc_attr($modal_title_id); ?>"
+						aria-describedby="<?php echo esc_attr($modal_resource_id); ?>"
+						tabindex="-1"
+					>
+						<button class="rag-resource-modal-close" type="button" data-rag-close aria-label="<?php echo esc_attr($is_english ? 'Close window' : 'Fermer la fenêtre'); ?>">
+							<span aria-hidden="true">&times;</span>
+						</button>
+						<p class="rag-resource-modal-kicker"><?php echo esc_html($is_english ? 'Studies & reports' : 'Études & rapports'); ?></p>
+						<h2 id="<?php echo esc_attr($modal_title_id); ?>"><?php echo esc_html($is_english ? 'Receive the report' : 'Recevoir l’étude'); ?></h2>
+						<p class="rag-resource-modal-title" id="<?php echo esc_attr($modal_resource_id); ?>"><?php echo esc_html($resource['title']); ?></p>
+			<?php endif; ?>
 			<form class="rag-resource-form" novalidate>
 				<label for="<?php echo esc_attr($field_id); ?>"><?php echo esc_html($settings['helper_text']); ?></label>
+				<input class="rag-resource-honeypot" type="text" name="website" value="" tabindex="-1" autocomplete="off" aria-hidden="true">
+				<input type="hidden" name="resource_language" value="<?php echo esc_attr($language); ?>">
 				<div class="rag-resource-fields">
-					<input id="<?php echo esc_attr($field_id); ?>" type="email" name="email" autocomplete="email" required placeholder="nom@entreprise.fr">
+					<input id="<?php echo esc_attr($field_id); ?>" type="email" name="email" autocomplete="email" required placeholder="<?php echo esc_attr($is_english ? 'name@company.com' : 'nom@entreprise.fr'); ?>">
 					<button type="submit"><?php echo esc_html($settings['button_label']); ?></button>
 				</div>
+				<p class="rag-resource-privacy"><?php echo esc_html($settings['privacy_notice']); ?></p>
 				<p class="rag-resource-message" aria-live="polite" hidden></p>
 			</form>
 			<div class="rag-resource-result" hidden tabindex="-1" aria-live="polite">
 				<p class="rag-resource-result-message"></p>
-				<a href="#" rel="noopener" target="_blank" download>Télécharger le document</a>
+				<a href="#" rel="noopener" target="_blank" download><?php echo esc_html($is_english ? 'Download the document' : 'Télécharger le document'); ?></a>
 			</div>
+			<?php if ($is_modal) : ?>
+					</div>
+				</div>
+			<?php endif; ?>
 		</div>
 		<?php
 		return (string) ob_get_clean();
@@ -363,32 +714,50 @@ final class Resource_Access_Gate {
 
 		$email = sanitize_email(wp_unslash($_POST['email'] ?? ''));
 		$resource_id = sanitize_title(wp_unslash($_POST['resource_id'] ?? ''));
+		$language = self::current_language(wp_unslash($_POST['resource_language'] ?? ''));
+		$is_english = 'en' === $language;
+		$honeypot = sanitize_text_field(wp_unslash($_POST['website'] ?? ''));
 		$resource = self::get_resource($resource_id);
 
+		if ('' !== $honeypot) {
+			wp_send_json_error(array('message' => $is_english ? 'Invalid request.' : 'Demande invalide.'), 400);
+		}
+
 		if (!is_email($email)) {
-			wp_send_json_error(array('message' => 'Adresse email invalide.'), 400);
+			wp_send_json_error(array('message' => $is_english ? 'Invalid email address.' : 'Adresse email invalide.'), 400);
 		}
 
 		if (!$resource) {
-			wp_send_json_error(array('message' => 'Ressource indisponible.'), 404);
+			wp_send_json_error(array('message' => $is_english ? 'Resource unavailable.' : 'Ressource indisponible.'), 404);
 		}
 
+		if (self::is_rate_limited($email)) {
+			wp_send_json_error(
+				array('message' => $is_english
+					? 'Too many successive requests. Please try again in a few minutes.'
+					: 'Trop de demandes successives. Réessayez dans quelques minutes.'),
+				429
+			);
+		}
+
+		$resource = self::translated_resource($resource, $language);
+		self::hit_rate_limit($email);
 		self::create_tables();
 
 		if (!self::save_contact($email, $resource['id'])) {
-			wp_send_json_error(array('message' => 'Enregistrement impossible.'), 500);
+			wp_send_json_error(array('message' => $is_english ? 'The request could not be saved.' : 'Enregistrement impossible.'), 500);
 		}
 
-		$mail_sent = self::send_resource_email($email, $resource);
+		$mail_sent = self::send_resource_email($email, $resource, $language);
 		self::log_request($email, $resource, $mail_sent);
 
-		$settings = self::settings();
+		$settings = self::translated_settings(self::settings(), $language);
 
 		wp_send_json_success(
 			array(
 				'message' => $mail_sent ? $settings['success_message'] : $settings['failure_mail_message'],
 				'downloadUrl' => esc_url_raw($resource['url']),
-				'downloadLabel' => 'Télécharger le document',
+				'downloadLabel' => $is_english ? 'Download the document' : 'Télécharger le document',
 				'mailSent' => (bool) $mail_sent,
 			)
 		);
@@ -412,7 +781,14 @@ final class Resource_Access_Gate {
 
 		foreach ($defaults as $key => $default) {
 			$value = isset($raw[$key]) ? wp_unslash($raw[$key]) : $default;
-			$settings[$key] = 'from_email' === $key ? sanitize_email($value) : sanitize_text_field($value);
+
+			if ('from_email' === $key) {
+				$settings[$key] = sanitize_email($value);
+			} elseif ('retention_days' === $key) {
+				$settings[$key] = min(3650, max(1, (int) $value));
+			} else {
+				$settings[$key] = sanitize_text_field($value);
+			}
 		}
 
 		if (!is_email($settings['from_email'])) {
@@ -575,6 +951,20 @@ final class Resource_Access_Gate {
 					<tr>
 						<th scope="row"><label for="rag-helper">Texte du formulaire</label></th>
 						<td><input id="rag-helper" class="large-text" type="text" name="rag_settings[helper_text]" value="<?php echo esc_attr($settings['helper_text']); ?>"></td>
+					</tr>
+					<tr>
+						<th scope="row"><label for="rag-privacy">Information sur les données</label></th>
+						<td>
+							<input id="rag-privacy" class="large-text" type="text" name="rag_settings[privacy_notice]" value="<?php echo esc_attr($settings['privacy_notice']); ?>">
+							<p class="description">Ce texte est affiché sous le champ email. Les adresses ne sont pas utilisées pour de la prospection.</p>
+						</td>
+					</tr>
+					<tr>
+						<th scope="row"><label for="rag-retention">Durée de conservation</label></th>
+						<td>
+							<input id="rag-retention" class="small-text" type="number" min="1" max="3650" name="rag_settings[retention_days]" value="<?php echo (int) $settings['retention_days']; ?>"> jours
+							<p class="description">Les contacts et demandes plus anciens sont supprimés automatiquement chaque jour.</p>
+						</td>
 					</tr>
 					<tr>
 						<th scope="row"><label for="rag-button">Texte du bouton</label></th>
@@ -792,5 +1182,6 @@ final class Resource_Access_Gate {
 }
 
 register_activation_hook(__FILE__, array('Resource_Access_Gate', 'activate'));
+register_deactivation_hook(__FILE__, array('Resource_Access_Gate', 'deactivate'));
 Resource_Access_Gate::init();
 

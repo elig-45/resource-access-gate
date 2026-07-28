@@ -4,7 +4,7 @@ Tags: downloads, resources, email, shortcode, lead-generation
 Requires at least: 5.8
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 1.0.0
+Stable tag: 1.4.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -25,10 +25,15 @@ The only practical limits are your WordPress hosting, database, and email delive
 = Key features =
 
 * Add an email gate with the `[resource_access_gate id="resource-id"]` shortcode.
+* Optionally open the email gate in an accessible modal with `mode="modal"` and `modal_id`.
 * Show the download link only after a valid email is submitted.
 * Send the same download link by email with `wp_mail()`.
+* Send a responsive branded HTML email with a plain-text fallback.
+* Localize front-end messages and emails in French and English.
 * Manage resources from a dedicated WordPress admin page.
 * Store contacts and requests in dedicated database tables.
+* Display a configurable privacy notice and automatically purge expired data.
+* Limit repeated requests and reject automated honeypot submissions.
 * Export request data as CSV.
 * Keep resource URLs out of the initial page HTML.
 * Use a free and open-source GPL-licensed plugin.
@@ -74,6 +79,23 @@ Emails and request logs are stored in dedicated WordPress database tables create
 Yes. Any downloadable file URL can be configured as a resource.
 
 == Changelog ==
+
+= 1.4.0 =
+* Added localized French and English front-end messages, resource titles, AJAX responses, and emails.
+* Synchronized the plugin metadata and documentation with version 1.4.0.
+
+= 1.3.0 =
+* Added configurable data-retention information and daily cleanup.
+* Added rate limiting and a honeypot field to reduce automated abuse.
+* Refined the branded email typography and modal privacy copy.
+
+= 1.2.0 =
+* Replaced the plain-text-only message with a responsive branded HTML email.
+* Added automatic Bridge logo reuse and a plain-text alternative for compatibility.
+
+= 1.1.0 =
+* Added an accessible modal display mode with external trigger support.
+* Added focus trapping, Escape-key closing, focus restoration, and responsive modal styles.
 
 = 1.0.0 =
 * Initial release.
