@@ -1,6 +1,18 @@
+<div align="center">
+
 # Resource Access Gate
 
-Free forever, open source, and built for unlimited email-gated resource downloads in WordPress.
+**Unlimited email-gated resource downloads for WordPress — free forever and open source.**
+
+[![Latest release](https://img.shields.io/github/v/release/elig-45/resource-access-gate?display_name=tag&sort=semver&style=flat-square&label=release&color=121066)](https://github.com/elig-45/resource-access-gate/releases/latest)
+[![WordPress 5.8+](https://img.shields.io/badge/WordPress-5.8%2B-21759B?style=flat-square&logo=wordpress&logoColor=white)](#requirements)
+[![PHP 7.4+](https://img.shields.io/badge/PHP-7.4%2B-777BB4?style=flat-square&logo=php&logoColor=white)](#requirements)
+[![License: GPL-2.0-or-later](https://img.shields.io/github/license/elig-45/resource-access-gate?style=flat-square&color=2f855a)](LICENSE)
+[![GitHub downloads](https://img.shields.io/github/downloads/elig-45/resource-access-gate/total?style=flat-square&label=downloads&color=6bc6b4)](https://github.com/elig-45/resource-access-gate/releases)
+
+[Features](#why-use-it) · [Quick start](#quick-start) · [Screenshots](#screenshots) · [Download](https://github.com/elig-45/resource-access-gate/releases/latest)
+
+</div>
 
 Resource Access Gate is a lightweight plugin for publishers, consultants, agencies, creators, and teams who want to share PDFs, reports, templates, white papers, decks, or private files without adding a heavy marketing platform.
 
@@ -55,13 +67,20 @@ element a `data-rag-open` attribute matching the modal ID:
 
 ## Screenshots
 
-### Studies and reports grid
-
-![Studies and reports grid powered by Resource Access Gate](assets/screenshots/studies-grid.png)
-
-### Accessible resource request modal
-
-![Resource request modal powered by Resource Access Gate](assets/screenshots/resource-modal-desktop.png)
+<table>
+  <tr>
+    <td width="50%">
+      <img src="assets/screenshots/studies-grid.png" alt="Studies and reports grid powered by Resource Access Gate">
+    </td>
+    <td width="50%">
+      <img src="assets/screenshots/resource-modal-desktop.png" alt="Accessible resource request modal powered by Resource Access Gate">
+    </td>
+  </tr>
+  <tr>
+    <td align="center"><strong>Studies and reports grid</strong></td>
+    <td align="center"><strong>Accessible request modal</strong></td>
+  </tr>
+</table>
 
 ## How It Works
 
