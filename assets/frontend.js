@@ -181,7 +181,7 @@
 		}
 
 		var data = new FormData();
-		data.append('action', 'rag_resource_access');
+		data.append('action', config.action || 'resoacga_resource_access');
 		data.append('nonce', config.nonce || '');
 		data.append('email', email);
 		data.append('resource_id', resourceId);

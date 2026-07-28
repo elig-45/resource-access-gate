@@ -4,7 +4,7 @@ Tags: downloads, resources, email, shortcode, lead-generation
 Requires at least: 5.8
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 1.5.0
+Stable tag: 1.6.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -79,6 +79,14 @@ Emails and request logs are stored in dedicated WordPress database tables create
 Yes. Any downloadable file URL can be configured as a resource.
 
 == Changelog ==
+
+= 1.6.0 =
+* Replaced short internal identifiers with the distinctive `resoacga_` prefix.
+* Moved administration CSS and JavaScript into properly enqueued asset files.
+* Updated database table creation to use `dbDelta()`.
+* Improved sanitization for submitted and server-provided request values.
+* Updated options, AJAX actions, nonces, scheduled hooks, transients, and database tables to use the new prefix.
+* Added a one-time, non-destructive migration for settings and request history created by earlier versions.
 
 = 1.5.0 =
 * Relicensed the plugin under GNU GPL version 3 or later.

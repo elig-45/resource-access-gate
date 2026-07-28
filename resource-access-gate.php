@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Resource Access Gate
  * Description: Free forever and free-software plugin for unlimited email-gated resource downloads, with no premium tier or paid unlocks.
- * Version: 1.5.0
+ * Version: 1.6.0
  * Requires at least: 5.8
  * Tested up to: 7.0
  * Requires PHP: 7.4
@@ -39,15 +39,24 @@ if (!defined('ABSPATH')) {
 }
 
 final class Resource_Access_Gate {
-	const VERSION = '1.5.0';
-	const OPTION_SETTINGS = 'rag_settings';
-	const OPTION_RESOURCES = 'rag_resources';
-	const OPTION_SCHEMA = 'rag_schema_version';
-	const AJAX_ACTION = 'rag_resource_access';
-	const NONCE_ACTION = 'rag_resource_access';
-	const CRON_HOOK = 'rag_cleanup_expired_data';
+	const VERSION = '1.6.0';
+	const OPTION_SETTINGS = 'resoacga_settings';
+	const OPTION_RESOURCES = 'resoacga_resources';
+	const OPTION_SCHEMA = 'resoacga_schema_version';
+	const OPTION_LEGACY_MIGRATION = 'resoacga_legacy_migration_complete';
+	const AJAX_ACTION = 'resoacga_resource_access';
+	const NONCE_ACTION = 'resoacga_resource_access';
+	const CRON_HOOK = 'resoacga_cleanup_expired_data';
+	const ADMIN_SAVE_ACTION = 'resoacga_save_settings';
+	const ADMIN_EXPORT_ACTION = 'resoacga_export_csv';
+	const MENU_SLUG = 'resource-access-gate';
 	const RATE_LIMIT_MAX = 5;
 	const RATE_LIMIT_WINDOW = 15 * MINUTE_IN_SECONDS;
+	const LEGACY_OPTION_SETTINGS = 'rag_settings';
+	const LEGACY_OPTION_RESOURCES = 'rag_resources';
+	const LEGACY_CRON_HOOK = 'rag_cleanup_expired_data';
+	const LEGACY_CONTACTS_TABLE = 'rag_resource_contacts';
+	const LEGACY_REQUESTS_TABLE = 'rag_resource_requests';
 
 	public static function init() {
 		add_action('init', array(__CLASS__, 'maybe_install'));
@@ -55,13 +64,15 @@ final class Resource_Access_Gate {
 		add_action('wp_ajax_' . self::AJAX_ACTION, array(__CLASS__, 'handle_resource_access'));
 		add_action('wp_ajax_nopriv_' . self::AJAX_ACTION, array(__CLASS__, 'handle_resource_access'));
 		add_action('admin_menu', array(__CLASS__, 'register_admin_page'));
-		add_action('admin_post_rag_save_settings', array(__CLASS__, 'handle_save_settings'));
-		add_action('admin_post_rag_export_csv', array(__CLASS__, 'handle_export_csv'));
+		add_action('admin_enqueue_scripts', array(__CLASS__, 'enqueue_admin_assets'));
+		add_action('admin_post_' . self::ADMIN_SAVE_ACTION, array(__CLASS__, 'handle_save_settings'));
+		add_action('admin_post_' . self::ADMIN_EXPORT_ACTION, array(__CLASS__, 'handle_export_csv'));
 		add_action(self::CRON_HOOK, array(__CLASS__, 'cleanup_expired_data'));
 	}
 
 	public static function activate() {
 		self::create_tables();
+		self::migrate_legacy_storage();
 		self::ensure_default_options();
 		self::schedule_cleanup();
 	}
@@ -75,6 +86,7 @@ final class Resource_Access_Gate {
 			self::create_tables();
 		}
 
+		self::migrate_legacy_storage();
 		self::ensure_default_options();
 		self::schedule_cleanup();
 	}
@@ -90,7 +102,7 @@ final class Resource_Access_Gate {
 		}
 
 		if (function_exists('pll_current_language')) {
-			$polylang_language = (string) pll_current_language('slug');
+			$polylang_language = sanitize_key((string) pll_current_language('slug'));
 			if (in_array($polylang_language, array('fr', 'en'), true)) {
 				return $polylang_language;
 			}
@@ -159,6 +171,45 @@ final class Resource_Access_Gate {
 		return array();
 	}
 
+	/**
+	 * Copies data created before 1.6.0 to the newly prefixed storage.
+	 *
+	 * The legacy options and tables are deliberately retained so an administrator
+	 * can roll back to 1.5.x without losing configuration or request history.
+	 */
+	private static function migrate_legacy_storage() {
+		if (self::VERSION === get_option(self::OPTION_LEGACY_MIGRATION)) {
+			return;
+		}
+
+		$current_settings = get_option(self::OPTION_SETTINGS, null);
+		$legacy_settings = get_option(self::LEGACY_OPTION_SETTINGS, null);
+		if (!is_array($current_settings) && is_array($legacy_settings)) {
+			update_option(
+				self::OPTION_SETTINGS,
+				self::sanitize_settings($legacy_settings),
+				false
+			);
+		}
+
+		$current_resources = get_option(self::OPTION_RESOURCES, null);
+		$legacy_resources = get_option(self::LEGACY_OPTION_RESOURCES, null);
+		if (!is_array($current_resources) && is_array($legacy_resources)) {
+			update_option(
+				self::OPTION_RESOURCES,
+				self::sanitize_resources_for_save($legacy_resources),
+				false
+			);
+		}
+
+		if (!self::migrate_legacy_tables()) {
+			return;
+		}
+
+		wp_clear_scheduled_hook(self::LEGACY_CRON_HOOK);
+		update_option(self::OPTION_LEGACY_MIGRATION, self::VERSION, false);
+	}
+
 	private static function ensure_default_options() {
 		if (!is_array(get_option(self::OPTION_SETTINGS))) {
 			add_option(self::OPTION_SETTINGS, self::default_settings(), '', false);
@@ -217,9 +268,60 @@ final class Resource_Access_Gate {
 		global $wpdb;
 
 		return array(
-			'contacts' => $wpdb->prefix . 'rag_resource_contacts',
-			'requests' => $wpdb->prefix . 'rag_resource_requests',
+			'contacts' => $wpdb->prefix . 'resoacga_resource_contacts',
+			'requests' => $wpdb->prefix . 'resoacga_resource_requests',
 		);
+	}
+
+	private static function legacy_table_names() {
+		global $wpdb;
+
+		return array(
+			'contacts' => $wpdb->prefix . self::LEGACY_CONTACTS_TABLE,
+			'requests' => $wpdb->prefix . self::LEGACY_REQUESTS_TABLE,
+		);
+	}
+
+	private static function database_table_exists($table_name) {
+		global $wpdb;
+
+		$matched_table = $wpdb->get_var(
+			$wpdb->prepare('SHOW TABLES LIKE %s', $wpdb->esc_like($table_name))
+		);
+
+		return $table_name === $matched_table;
+	}
+
+	private static function migrate_legacy_tables() {
+		global $wpdb;
+
+		$tables = self::table_names();
+		$legacy_tables = self::legacy_table_names();
+		$migration_succeeded = true;
+
+		if (self::database_table_exists($legacy_tables['contacts'])) {
+			// Table identifiers are assembled exclusively from the trusted WordPress prefix and class constants.
+			$contacts_result = $wpdb->query(
+				"INSERT IGNORE INTO {$tables['contacts']}
+					(email, first_resource_id, last_resource_id, request_count, created_at, updated_at, ip_hash, user_agent_hash)
+				SELECT email, first_resource_id, last_resource_id, request_count, created_at, updated_at, ip_hash, user_agent_hash
+				FROM {$legacy_tables['contacts']}"
+			);
+			$migration_succeeded = false !== $contacts_result;
+		}
+
+		if (self::database_table_exists($legacy_tables['requests'])) {
+			// Table identifiers are assembled exclusively from the trusted WordPress prefix and class constants.
+			$requests_result = $wpdb->query(
+				"INSERT INTO {$tables['requests']}
+					(email, resource_id, resource_title, requested_at, mail_sent, ip_hash, user_agent_hash)
+				SELECT email, resource_id, resource_title, requested_at, mail_sent, ip_hash, user_agent_hash
+				FROM {$legacy_tables['requests']}"
+			);
+			$migration_succeeded = $migration_succeeded && false !== $requests_result;
+		}
+
+		return $migration_succeeded;
 	}
 
 	private static function create_tables() {
@@ -228,39 +330,40 @@ final class Resource_Access_Gate {
 		$tables = self::table_names();
 		$charset_collate = $wpdb->get_charset_collate();
 
-		$wpdb->query(
-			"CREATE TABLE {$tables['contacts']} (
-				id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
-				email varchar(190) NOT NULL,
-				first_resource_id varchar(190) DEFAULT '',
-				last_resource_id varchar(190) DEFAULT '',
-				request_count int(10) unsigned NOT NULL DEFAULT 0,
-				created_at datetime NOT NULL,
-				updated_at datetime NOT NULL,
-				ip_hash varchar(64) DEFAULT '',
-				user_agent_hash varchar(64) DEFAULT '',
-				PRIMARY KEY  (id),
-				UNIQUE KEY email (email),
-				KEY updated_at (updated_at)
-			) $charset_collate;"
-		);
+		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
 
-		$wpdb->query(
-			"CREATE TABLE {$tables['requests']} (
-				id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
-				email varchar(190) NOT NULL,
-				resource_id varchar(190) NOT NULL,
-				resource_title text NOT NULL,
-				requested_at datetime NOT NULL,
-				mail_sent tinyint(1) NOT NULL DEFAULT 0,
-				ip_hash varchar(64) DEFAULT '',
-				user_agent_hash varchar(64) DEFAULT '',
-				PRIMARY KEY  (id),
-				KEY email (email),
-				KEY resource_id (resource_id),
-				KEY requested_at (requested_at)
-			) $charset_collate;"
-		);
+		$contacts_sql = "CREATE TABLE {$tables['contacts']} (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			email varchar(190) NOT NULL,
+			first_resource_id varchar(190) DEFAULT '',
+			last_resource_id varchar(190) DEFAULT '',
+			request_count int(10) unsigned NOT NULL DEFAULT 0,
+			created_at datetime NOT NULL,
+			updated_at datetime NOT NULL,
+			ip_hash varchar(64) DEFAULT '',
+			user_agent_hash varchar(64) DEFAULT '',
+			PRIMARY KEY  (id),
+			UNIQUE KEY email (email),
+			KEY updated_at (updated_at)
+		) $charset_collate;";
+
+		$requests_sql = "CREATE TABLE {$tables['requests']} (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			email varchar(190) NOT NULL,
+			resource_id varchar(190) NOT NULL,
+			resource_title text NOT NULL,
+			requested_at datetime NOT NULL,
+			mail_sent tinyint(1) NOT NULL DEFAULT 0,
+			ip_hash varchar(64) DEFAULT '',
+			user_agent_hash varchar(64) DEFAULT '',
+			PRIMARY KEY  (id),
+			KEY email (email),
+			KEY resource_id (resource_id),
+			KEY requested_at (requested_at)
+		) $charset_collate;";
+
+		dbDelta($contacts_sql);
+		dbDelta($requests_sql);
 
 		update_option(self::OPTION_SCHEMA, self::VERSION, false);
 	}
@@ -305,9 +408,16 @@ final class Resource_Access_Gate {
 	}
 
 	private static function request_fingerprint() {
+		$remote_addr = isset($_SERVER['REMOTE_ADDR']) && is_scalar($_SERVER['REMOTE_ADDR'])
+			? sanitize_text_field(wp_unslash($_SERVER['REMOTE_ADDR']))
+			: '';
+		$user_agent = isset($_SERVER['HTTP_USER_AGENT']) && is_scalar($_SERVER['HTTP_USER_AGENT'])
+			? sanitize_text_field(wp_unslash($_SERVER['HTTP_USER_AGENT']))
+			: '';
+
 		return array(
-			'ip_hash' => self::hash_request_value($_SERVER['REMOTE_ADDR'] ?? ''),
-			'user_agent_hash' => self::hash_request_value($_SERVER['HTTP_USER_AGENT'] ?? ''),
+			'ip_hash' => self::hash_request_value($remote_addr),
+			'user_agent_hash' => self::hash_request_value($user_agent),
 		);
 	}
 
@@ -315,7 +425,7 @@ final class Resource_Access_Gate {
 		$fingerprint = self::request_fingerprint();
 		$source = strtolower(trim((string) $email)) . '|' . $fingerprint['ip_hash'];
 
-		return 'rag_rate_' . substr(hash('sha256', $source), 0, 40);
+		return 'resoacga_rate_' . substr(hash('sha256', $source), 0, 40);
 	}
 
 	private static function is_rate_limited($email) {
@@ -634,6 +744,7 @@ final class Resource_Access_Gate {
 			'resource-access-gate',
 			'ResourceAccessGate',
 			array(
+				'action' => self::AJAX_ACTION,
 				'ajaxUrl' => admin_url('admin-ajax.php'),
 				'nonce' => wp_create_nonce(self::NONCE_ACTION),
 				'invalidEmail' => $is_english ? 'Please enter a valid email address.' : 'Veuillez saisir une adresse email valide.',
@@ -641,6 +752,36 @@ final class Resource_Access_Gate {
 				'genericError' => $is_english
 					? 'The link could not be prepared. Check the address or try again later.'
 					: 'Le lien n’a pas pu être préparé. Vérifiez l’adresse ou réessayez plus tard.',
+			)
+		);
+	}
+
+	public static function enqueue_admin_assets($hook_suffix) {
+		if ('toplevel_page_' . self::MENU_SLUG !== $hook_suffix) {
+			return;
+		}
+
+		wp_enqueue_style(
+			'resource-access-gate-admin',
+			self::plugin_url('assets/admin.css'),
+			array(),
+			self::VERSION
+		);
+		wp_enqueue_script(
+			'resource-access-gate-admin',
+			self::plugin_url('assets/admin.js'),
+			array(),
+			self::VERSION,
+			true
+		);
+		wp_localize_script(
+			'resource-access-gate-admin',
+			'ResourceAccessGateAdmin',
+			array(
+				'shortcodeTemplate' => '[resource_access_gate id="%s"]',
+				'missingId' => 'Ajoutez un ID.',
+				'copied' => 'Copié.',
+				'copyFailed' => 'Copie impossible.',
 			)
 		);
 	}
@@ -733,11 +874,20 @@ final class Resource_Access_Gate {
 	public static function handle_resource_access() {
 		check_ajax_referer(self::NONCE_ACTION, 'nonce');
 
-		$email = sanitize_email(wp_unslash($_POST['email'] ?? ''));
-		$resource_id = sanitize_title(wp_unslash($_POST['resource_id'] ?? ''));
-		$language = self::current_language(wp_unslash($_POST['resource_language'] ?? ''));
+		$email = isset($_POST['email']) && is_scalar($_POST['email'])
+			? sanitize_email(wp_unslash($_POST['email']))
+			: '';
+		$resource_id = isset($_POST['resource_id']) && is_scalar($_POST['resource_id'])
+			? sanitize_title(wp_unslash($_POST['resource_id']))
+			: '';
+		$requested_language = isset($_POST['resource_language']) && is_scalar($_POST['resource_language'])
+			? sanitize_key(wp_unslash($_POST['resource_language']))
+			: '';
+		$language = self::current_language($requested_language);
 		$is_english = 'en' === $language;
-		$honeypot = sanitize_text_field(wp_unslash($_POST['website'] ?? ''));
+		$honeypot = isset($_POST['website']) && is_scalar($_POST['website'])
+			? sanitize_text_field(wp_unslash($_POST['website']))
+			: '';
 		$resource = self::get_resource($resource_id);
 
 		if ('' !== $honeypot) {
@@ -789,7 +939,7 @@ final class Resource_Access_Gate {
 			'Resource Access Gate',
 			'Ressources',
 			'manage_options',
-			'resource-access-gate',
+			self::MENU_SLUG,
 			array(__CLASS__, 'render_admin_page'),
 			'dashicons-download',
 			58
@@ -799,9 +949,10 @@ final class Resource_Access_Gate {
 	private static function sanitize_settings($raw) {
 		$defaults = self::default_settings();
 		$settings = array();
+		$raw = is_array($raw) ? $raw : array();
 
 		foreach ($defaults as $key => $default) {
-			$value = isset($raw[$key]) ? wp_unslash($raw[$key]) : $default;
+			$value = isset($raw[$key]) && is_scalar($raw[$key]) ? $raw[$key] : $default;
 
 			if ('from_email' === $key) {
 				$settings[$key] = sanitize_email($value);
@@ -824,9 +975,15 @@ final class Resource_Access_Gate {
 
 		foreach ((array) $raw_resources as $row) {
 			$row = (array) $row;
-			$title = sanitize_text_field(wp_unslash($row['title'] ?? ''));
-			$id = sanitize_title(wp_unslash($row['id'] ?? ''));
-			$url = esc_url_raw(wp_unslash($row['url'] ?? ''));
+			$title = isset($row['title']) && is_scalar($row['title'])
+				? sanitize_text_field($row['title'])
+				: '';
+			$id = isset($row['id']) && is_scalar($row['id'])
+				? sanitize_title($row['id'])
+				: '';
+			$url = isset($row['url']) && is_scalar($row['url'])
+				? esc_url_raw($row['url'])
+				: '';
 
 			if ('' === $id && '' !== $title) {
 				$id = sanitize_title($title);
@@ -849,15 +1006,22 @@ final class Resource_Access_Gate {
 
 	public static function handle_save_settings() {
 		if (!current_user_can('manage_options')) {
-			wp_die('Accès refusé.');
+			wp_die(esc_html__('Access denied.', 'resource-access-gate'));
 		}
 
-		check_admin_referer('rag_save_settings');
+		check_admin_referer(self::ADMIN_SAVE_ACTION);
 
-		update_option(self::OPTION_SETTINGS, self::sanitize_settings($_POST['rag_settings'] ?? array()), false);
-		update_option(self::OPTION_RESOURCES, self::sanitize_resources_for_save($_POST['rag_resources'] ?? array()), false);
+		$raw_settings = isset($_POST[self::OPTION_SETTINGS]) && is_array($_POST[self::OPTION_SETTINGS])
+			? wp_unslash($_POST[self::OPTION_SETTINGS])
+			: array();
+		$raw_resources = isset($_POST[self::OPTION_RESOURCES]) && is_array($_POST[self::OPTION_RESOURCES])
+			? wp_unslash($_POST[self::OPTION_RESOURCES])
+			: array();
 
-		wp_safe_redirect(add_query_arg(array('page' => 'resource-access-gate', 'updated' => '1'), admin_url('admin.php')));
+		update_option(self::OPTION_SETTINGS, self::sanitize_settings($raw_settings), false);
+		update_option(self::OPTION_RESOURCES, self::sanitize_resources_for_save($raw_resources), false);
+
+		wp_safe_redirect(add_query_arg(array('page' => self::MENU_SLUG, 'updated' => '1'), admin_url('admin.php')));
 		exit;
 	}
 
@@ -897,49 +1061,17 @@ final class Resource_Access_Gate {
 		$resources[] = array('id' => '', 'title' => '', 'url' => '', 'enabled' => 1);
 		$stats = self::stats();
 		$requests = self::recent_requests();
-		$export_url = wp_nonce_url(admin_url('admin-post.php?action=rag_export_csv'), 'rag_export_csv');
+		$export_url = wp_nonce_url(
+			admin_url('admin-post.php?action=' . self::ADMIN_EXPORT_ACTION),
+			self::ADMIN_EXPORT_ACTION
+		);
+		$updated = isset($_GET['updated']) && is_scalar($_GET['updated'])
+			? sanitize_key(wp_unslash($_GET['updated']))
+			: '';
 		?>
-		<div class="wrap">
+		<div class="wrap resource-access-gate-admin">
 			<h1>Resource Access Gate</h1>
-			<style>
-				.rag-shortcode-cell {
-					min-width: 360px;
-				}
-
-				.rag-shortcode-tools {
-					display: flex;
-					gap: 8px;
-					align-items: center;
-				}
-
-				.rag-shortcode-preview {
-					max-width: 260px;
-				}
-
-				.rag-copy-shortcode {
-					display: inline-flex;
-					align-items: center;
-					justify-content: center;
-					width: 32px;
-					min-width: 32px;
-					padding: 0;
-				}
-
-				.rag-copy-shortcode .dashicons {
-					width: 18px;
-					height: 18px;
-					font-size: 18px;
-					line-height: 18px;
-				}
-
-				.rag-copy-feedback {
-					color: #2271b1;
-					font-size: 12px;
-					line-height: 1.4;
-				}
-			</style>
-
-			<?php if (isset($_GET['updated'])) : ?>
+			<?php if ('1' === $updated) : ?>
 				<div class="notice notice-success is-dismissible"><p>Réglages enregistrés.</p></div>
 			<?php endif; ?>
 
@@ -949,55 +1081,55 @@ final class Resource_Access_Gate {
 			</p>
 
 			<form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
-				<input type="hidden" name="action" value="rag_save_settings">
-				<?php wp_nonce_field('rag_save_settings'); ?>
+				<input type="hidden" name="action" value="<?php echo esc_attr(self::ADMIN_SAVE_ACTION); ?>">
+				<?php wp_nonce_field(self::ADMIN_SAVE_ACTION); ?>
 
 				<h2>Réglages email</h2>
 				<table class="form-table" role="presentation">
 					<tr>
-						<th scope="row"><label for="rag-from-name">Nom expéditeur</label></th>
-						<td><input id="rag-from-name" class="regular-text" type="text" name="rag_settings[from_name]" value="<?php echo esc_attr($settings['from_name']); ?>"></td>
+						<th scope="row"><label for="resoacga-from-name">Nom expéditeur</label></th>
+						<td><input id="resoacga-from-name" class="regular-text" type="text" name="<?php echo esc_attr(self::OPTION_SETTINGS); ?>[from_name]" value="<?php echo esc_attr($settings['from_name']); ?>"></td>
 					</tr>
 					<tr>
-						<th scope="row"><label for="rag-from-email">Email expéditeur</label></th>
-						<td><input id="rag-from-email" class="regular-text" type="email" name="rag_settings[from_email]" value="<?php echo esc_attr($settings['from_email']); ?>"></td>
+						<th scope="row"><label for="resoacga-from-email">Email expéditeur</label></th>
+						<td><input id="resoacga-from-email" class="regular-text" type="email" name="<?php echo esc_attr(self::OPTION_SETTINGS); ?>[from_email]" value="<?php echo esc_attr($settings['from_email']); ?>"></td>
 					</tr>
 					<tr>
-						<th scope="row"><label for="rag-subject">Objet du mail</label></th>
+						<th scope="row"><label for="resoacga-subject">Objet du mail</label></th>
 						<td>
-							<input id="rag-subject" class="large-text" type="text" name="rag_settings[subject]" value="<?php echo esc_attr($settings['subject']); ?>">
+							<input id="resoacga-subject" class="large-text" type="text" name="<?php echo esc_attr(self::OPTION_SETTINGS); ?>[subject]" value="<?php echo esc_attr($settings['subject']); ?>">
 							<p class="description">Variables disponibles : <code>{site_name}</code>, <code>{resource_title}</code>.</p>
 						</td>
 					</tr>
 					<tr>
-						<th scope="row"><label for="rag-helper">Texte du formulaire</label></th>
-						<td><input id="rag-helper" class="large-text" type="text" name="rag_settings[helper_text]" value="<?php echo esc_attr($settings['helper_text']); ?>"></td>
+						<th scope="row"><label for="resoacga-helper">Texte du formulaire</label></th>
+						<td><input id="resoacga-helper" class="large-text" type="text" name="<?php echo esc_attr(self::OPTION_SETTINGS); ?>[helper_text]" value="<?php echo esc_attr($settings['helper_text']); ?>"></td>
 					</tr>
 					<tr>
-						<th scope="row"><label for="rag-privacy">Information sur les données</label></th>
+						<th scope="row"><label for="resoacga-privacy">Information sur les données</label></th>
 						<td>
-							<input id="rag-privacy" class="large-text" type="text" name="rag_settings[privacy_notice]" value="<?php echo esc_attr($settings['privacy_notice']); ?>">
+							<input id="resoacga-privacy" class="large-text" type="text" name="<?php echo esc_attr(self::OPTION_SETTINGS); ?>[privacy_notice]" value="<?php echo esc_attr($settings['privacy_notice']); ?>">
 							<p class="description">Ce texte est affiché sous le champ email. Les adresses ne sont pas utilisées pour de la prospection.</p>
 						</td>
 					</tr>
 					<tr>
-						<th scope="row"><label for="rag-retention">Durée de conservation</label></th>
+						<th scope="row"><label for="resoacga-retention">Durée de conservation</label></th>
 						<td>
-							<input id="rag-retention" class="small-text" type="number" min="1" max="3650" name="rag_settings[retention_days]" value="<?php echo (int) $settings['retention_days']; ?>"> jours
+							<input id="resoacga-retention" class="small-text" type="number" min="1" max="3650" name="<?php echo esc_attr(self::OPTION_SETTINGS); ?>[retention_days]" value="<?php echo (int) $settings['retention_days']; ?>"> jours
 							<p class="description">Les contacts et demandes plus anciens sont supprimés automatiquement chaque jour.</p>
 						</td>
 					</tr>
 					<tr>
-						<th scope="row"><label for="rag-button">Texte du bouton</label></th>
-						<td><input id="rag-button" class="regular-text" type="text" name="rag_settings[button_label]" value="<?php echo esc_attr($settings['button_label']); ?>"></td>
+						<th scope="row"><label for="resoacga-button">Texte du bouton</label></th>
+						<td><input id="resoacga-button" class="regular-text" type="text" name="<?php echo esc_attr(self::OPTION_SETTINGS); ?>[button_label]" value="<?php echo esc_attr($settings['button_label']); ?>"></td>
 					</tr>
 					<tr>
-						<th scope="row"><label for="rag-success">Message succès</label></th>
-						<td><input id="rag-success" class="large-text" type="text" name="rag_settings[success_message]" value="<?php echo esc_attr($settings['success_message']); ?>"></td>
+						<th scope="row"><label for="resoacga-success">Message succès</label></th>
+						<td><input id="resoacga-success" class="large-text" type="text" name="<?php echo esc_attr(self::OPTION_SETTINGS); ?>[success_message]" value="<?php echo esc_attr($settings['success_message']); ?>"></td>
 					</tr>
 					<tr>
-						<th scope="row"><label for="rag-mail-failure">Message si le mail échoue</label></th>
-						<td><input id="rag-mail-failure" class="large-text" type="text" name="rag_settings[failure_mail_message]" value="<?php echo esc_attr($settings['failure_mail_message']); ?>"></td>
+						<th scope="row"><label for="resoacga-mail-failure">Message si le mail échoue</label></th>
+						<td><input id="resoacga-mail-failure" class="large-text" type="text" name="<?php echo esc_attr(self::OPTION_SETTINGS); ?>[failure_mail_message]" value="<?php echo esc_attr($settings['failure_mail_message']); ?>"></td>
 					</tr>
 				</table>
 
@@ -1021,105 +1153,26 @@ final class Resource_Access_Gate {
 							?>
 							<tr>
 								<td>
-									<input type="hidden" name="rag_resources[<?php echo (int) $index; ?>][enabled]" value="0">
-									<input type="checkbox" name="rag_resources[<?php echo (int) $index; ?>][enabled]" value="1" <?php checked(!empty($resource['enabled'])); ?>>
+									<input type="hidden" name="<?php echo esc_attr(self::OPTION_RESOURCES); ?>[<?php echo (int) $index; ?>][enabled]" value="0">
+									<input type="checkbox" name="<?php echo esc_attr(self::OPTION_RESOURCES); ?>[<?php echo (int) $index; ?>][enabled]" value="1" <?php checked(!empty($resource['enabled'])); ?>>
 								</td>
-								<td><input class="regular-text rag-resource-id-input" type="text" name="rag_resources[<?php echo (int) $index; ?>][id]" value="<?php echo esc_attr($resource['id']); ?>"></td>
-								<td><input class="large-text" type="text" name="rag_resources[<?php echo (int) $index; ?>][title]" value="<?php echo esc_attr($resource['title']); ?>"></td>
-								<td><input class="large-text code" type="url" name="rag_resources[<?php echo (int) $index; ?>][url]" value="<?php echo esc_url($resource['url']); ?>"></td>
-								<td class="rag-shortcode-cell">
-									<div class="rag-shortcode-tools">
-										<input class="regular-text code rag-shortcode-preview" type="text" value="<?php echo esc_attr($resource_shortcode); ?>" readonly aria-label="Shortcode de la ressource">
-										<button type="button" class="button button-secondary rag-copy-shortcode" aria-label="Copier le shortcode" title="Copier le shortcode">
+								<td><input class="regular-text resoacga-resource-id-input" type="text" name="<?php echo esc_attr(self::OPTION_RESOURCES); ?>[<?php echo (int) $index; ?>][id]" value="<?php echo esc_attr($resource['id']); ?>"></td>
+								<td><input class="large-text" type="text" name="<?php echo esc_attr(self::OPTION_RESOURCES); ?>[<?php echo (int) $index; ?>][title]" value="<?php echo esc_attr($resource['title']); ?>"></td>
+								<td><input class="large-text code" type="url" name="<?php echo esc_attr(self::OPTION_RESOURCES); ?>[<?php echo (int) $index; ?>][url]" value="<?php echo esc_url($resource['url']); ?>"></td>
+								<td class="resoacga-shortcode-cell">
+									<div class="resoacga-shortcode-tools">
+										<input class="regular-text code resoacga-shortcode-preview" type="text" value="<?php echo esc_attr($resource_shortcode); ?>" readonly aria-label="Shortcode de la ressource">
+										<button type="button" class="button button-secondary resoacga-copy-shortcode" aria-label="Copier le shortcode" title="Copier le shortcode">
 											<span class="dashicons dashicons-clipboard" aria-hidden="true"></span>
 											<span class="screen-reader-text">Copier le shortcode</span>
 										</button>
-										<span class="rag-copy-feedback" aria-live="polite"></span>
+										<span class="resoacga-copy-feedback" aria-live="polite"></span>
 									</div>
 								</td>
 							</tr>
 						<?php endforeach; ?>
 					</tbody>
 				</table>
-				<script>
-					(function () {
-						function shortcodeFromRow(row) {
-							var idInput = row ? row.querySelector('.rag-resource-id-input') : null;
-							var id = idInput ? idInput.value.trim().replace(/"/g, '') : '';
-							return id ? '[resource_access_gate id="' + id + '"]' : '';
-						}
-
-						function updateShortcode(row) {
-							var preview = row ? row.querySelector('.rag-shortcode-preview') : null;
-							if (preview) {
-								preview.value = shortcodeFromRow(row);
-							}
-						}
-
-						function copyText(text, onSuccess, onError) {
-							if (navigator.clipboard && navigator.clipboard.writeText) {
-								navigator.clipboard.writeText(text).then(onSuccess).catch(onError);
-								return;
-							}
-
-							var textarea = document.createElement('textarea');
-							textarea.value = text;
-							textarea.setAttribute('readonly', 'readonly');
-							textarea.style.position = 'fixed';
-							textarea.style.left = '-9999px';
-							document.body.appendChild(textarea);
-							textarea.select();
-
-							try {
-								document.execCommand('copy') ? onSuccess() : onError();
-							} catch (error) {
-								onError();
-							} finally {
-								document.body.removeChild(textarea);
-							}
-						}
-
-						document.addEventListener('input', function (event) {
-							if (!event.target.classList.contains('rag-resource-id-input')) {
-								return;
-							}
-
-							updateShortcode(event.target.closest('tr'));
-						});
-
-						document.addEventListener('click', function (event) {
-							var button = event.target.closest('.rag-copy-shortcode');
-							if (!button) {
-								return;
-							}
-
-							var row = button.closest('tr');
-							var feedback = row ? row.querySelector('.rag-copy-feedback') : null;
-							var shortcode = shortcodeFromRow(row);
-							updateShortcode(row);
-
-							if (!shortcode) {
-								if (feedback) {
-									feedback.textContent = 'Ajoutez un ID.';
-								}
-								return;
-							}
-
-							copyText(shortcode, function () {
-								if (feedback) {
-									feedback.textContent = 'Copié.';
-									window.setTimeout(function () {
-										feedback.textContent = '';
-									}, 1800);
-								}
-							}, function () {
-								if (feedback) {
-									feedback.textContent = 'Copie impossible.';
-								}
-							});
-						});
-					})();
-				</script>
 
 				<?php submit_button('Enregistrer'); ?>
 			</form>
@@ -1164,10 +1217,10 @@ final class Resource_Access_Gate {
 
 	public static function handle_export_csv() {
 		if (!current_user_can('manage_options')) {
-			wp_die('Accès refusé.');
+			wp_die(esc_html__('Access denied.', 'resource-access-gate'));
 		}
 
-		check_admin_referer('rag_export_csv');
+		check_admin_referer(self::ADMIN_EXPORT_ACTION);
 
 		global $wpdb;
 		$tables = self::table_names();
@@ -1181,6 +1234,10 @@ final class Resource_Access_Gate {
 		header('Content-Disposition: attachment; filename=resource-access-gate-' . gmdate('Y-m-d') . '.csv');
 
 		$output = fopen('php://output', 'w');
+		if (false === $output) {
+			wp_die(esc_html__('CSV export could not be opened.', 'resource-access-gate'));
+		}
+
 		echo "\xEF\xBB\xBF";
 		fputcsv($output, array('requested_at', 'email', 'resource_id', 'resource_title', 'mail_sent'));
 
