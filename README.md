@@ -59,7 +59,7 @@ The only practical limits are your WordPress hosting, database, and email delive
 
 ## Quick Start
 
-1. Copy `resource-access-gate` into `wp-content/plugins/`.
+1. Copy `email-download-gate` into `wp-content/plugins/`.
 2. Activate **Resource Access Gate** in WordPress.
 3. Open **Resources** in the admin menu.
 4. Add a resource ID, title, and file URL.

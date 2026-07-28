@@ -4,7 +4,7 @@ Tags: downloads, resources, email, shortcode, lead-generation
 Requires at least: 5.8
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 1.6.0
+Stable tag: 1.6.1
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -50,7 +50,7 @@ Resource Access Gate uses the standard WordPress `wp_mail()` function. For relia
 
 == Installation ==
 
-1. Upload the `resource-access-gate` folder to the `/wp-content/plugins/` directory.
+1. Upload the `email-download-gate` folder to the `/wp-content/plugins/` directory.
 2. Activate the plugin through the `Plugins` screen in WordPress.
 3. Open `Resources` in the WordPress admin menu.
 4. Configure email settings and add at least one resource.
@@ -79,6 +79,10 @@ Emails and request logs are stored in dedicated WordPress database tables create
 Yes. Any downloadable file URL can be configured as a resource.
 
 == Changelog ==
+
+= 1.6.1 =
+* Matched the translation text domain and install directory to the assigned WordPress.org slug, `email-download-gate`.
+* Excluded the repository-only `.gitattributes` file from installable release archives.
 
 = 1.6.0 =
 * Replaced short internal identifiers with the distinctive `resoacga_` prefix.

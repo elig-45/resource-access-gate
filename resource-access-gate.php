@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Resource Access Gate
  * Description: Free forever and free-software plugin for unlimited email-gated resource downloads, with no premium tier or paid unlocks.
- * Version: 1.6.0
+ * Version: 1.6.1
  * Requires at least: 5.8
  * Tested up to: 7.0
  * Requires PHP: 7.4
@@ -10,7 +10,7 @@
  * Author URI: https://github.com/elig-45
  * License: GPL-3.0-or-later
  * License URI: https://www.gnu.org/licenses/gpl-3.0.html
- * Text Domain: resource-access-gate
+ * Text Domain: email-download-gate
  */
 
 /**
@@ -39,7 +39,7 @@ if (!defined('ABSPATH')) {
 }
 
 final class Resource_Access_Gate {
-	const VERSION = '1.6.0';
+	const VERSION = '1.6.1';
 	const OPTION_SETTINGS = 'resoacga_settings';
 	const OPTION_RESOURCES = 'resoacga_resources';
 	const OPTION_SCHEMA = 'resoacga_schema_version';
@@ -178,7 +178,7 @@ final class Resource_Access_Gate {
 	 * can roll back to 1.5.x without losing configuration or request history.
 	 */
 	private static function migrate_legacy_storage() {
-		if (self::VERSION === get_option(self::OPTION_LEGACY_MIGRATION)) {
+		if (get_option(self::OPTION_LEGACY_MIGRATION)) {
 			return;
 		}
 
@@ -207,7 +207,7 @@ final class Resource_Access_Gate {
 		}
 
 		wp_clear_scheduled_hook(self::LEGACY_CRON_HOOK);
-		update_option(self::OPTION_LEGACY_MIGRATION, self::VERSION, false);
+		update_option(self::OPTION_LEGACY_MIGRATION, '1', false);
 	}
 
 	private static function ensure_default_options() {
@@ -1006,16 +1006,16 @@ final class Resource_Access_Gate {
 
 	public static function handle_save_settings() {
 		if (!current_user_can('manage_options')) {
-			wp_die(esc_html__('Access denied.', 'resource-access-gate'));
+			wp_die(esc_html__('Access denied.', 'email-download-gate'));
 		}
 
 		check_admin_referer(self::ADMIN_SAVE_ACTION);
 
 		$raw_settings = isset($_POST[self::OPTION_SETTINGS]) && is_array($_POST[self::OPTION_SETTINGS])
-			? wp_unslash($_POST[self::OPTION_SETTINGS])
+			? map_deep(wp_unslash($_POST[self::OPTION_SETTINGS]), 'sanitize_text_field')
 			: array();
 		$raw_resources = isset($_POST[self::OPTION_RESOURCES]) && is_array($_POST[self::OPTION_RESOURCES])
-			? wp_unslash($_POST[self::OPTION_RESOURCES])
+			? map_deep(wp_unslash($_POST[self::OPTION_RESOURCES]), 'sanitize_text_field')
 			: array();
 
 		update_option(self::OPTION_SETTINGS, self::sanitize_settings($raw_settings), false);
@@ -1065,9 +1065,8 @@ final class Resource_Access_Gate {
 			admin_url('admin-post.php?action=' . self::ADMIN_EXPORT_ACTION),
 			self::ADMIN_EXPORT_ACTION
 		);
-		$updated = isset($_GET['updated']) && is_scalar($_GET['updated'])
-			? sanitize_key(wp_unslash($_GET['updated']))
-			: '';
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only notice flag set after a nonce-verified save.
+		$updated = isset($_GET['updated']) && is_scalar($_GET['updated']) ? sanitize_key(wp_unslash($_GET['updated'])) : '';
 		?>
 		<div class="wrap resource-access-gate-admin">
 			<h1>Resource Access Gate</h1>
@@ -1217,7 +1216,7 @@ final class Resource_Access_Gate {
 
 	public static function handle_export_csv() {
 		if (!current_user_can('manage_options')) {
-			wp_die(esc_html__('Access denied.', 'resource-access-gate'));
+			wp_die(esc_html__('Access denied.', 'email-download-gate'));
 		}
 
 		check_admin_referer(self::ADMIN_EXPORT_ACTION);
@@ -1235,7 +1234,7 @@ final class Resource_Access_Gate {
 
 		$output = fopen('php://output', 'w');
 		if (false === $output) {
-			wp_die(esc_html__('CSV export could not be opened.', 'resource-access-gate'));
+			wp_die(esc_html__('CSV export could not be opened.', 'email-download-gate'));
 		}
 
 		echo "\xEF\xBB\xBF";
@@ -1254,7 +1253,7 @@ final class Resource_Access_Gate {
 			);
 		}
 
-		fclose($output);
+		// The php://output stream is closed automatically when this request ends.
 		exit;
 	}
 }
