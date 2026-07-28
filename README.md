@@ -10,6 +10,8 @@
 [![License: GPL-2.0-or-later](https://img.shields.io/github/license/elig-45/resource-access-gate?style=flat-square&color=2f855a)](LICENSE)
 [![GitHub downloads](https://img.shields.io/github/downloads/elig-45/resource-access-gate/total?style=flat-square&label=downloads&color=6bc6b4)](https://github.com/elig-45/resource-access-gate/releases)
 
+<a href="https://u.fsf.org/16e"><img src="https://static.fsf.org/nosvn/images/badges/fsfs_icons_beige-bg.png" alt="Free Software, Free Society"></a>
+
 [Features](#why-use-it) · [Quick start](#quick-start) · [Screenshots](#screenshots) · [Download](https://github.com/elig-45/resource-access-gate/releases/latest)
 
 </div>
